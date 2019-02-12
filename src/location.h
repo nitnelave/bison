@@ -106,14 +106,14 @@ void location_compute (location *loc,
 /* Print location to file.
    Return number of actually printed characters.
    Warning: uses quotearg's slot 3. */
-unsigned location_print (location loc, FILE *out);
+unsigned location_print (location loc);
 
 /* Free any allocated resources and close any open file handles that are
    left-over by the usage of location_caret.  */
 void caret_free (void);
 
-/* Output to OUT the line and caret corresponding to location LOC.  */
-void location_caret (location loc, FILE *out);
+/* Output to stderr the line and caret corresponding to location LOC.  */
+void location_caret (location loc);
 
 /* Return -1, 0, 1, depending whether a is before, equal, or
    after b.  */

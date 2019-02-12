@@ -24,6 +24,21 @@
 /* Sub-messages indent. */
 # define SUB_INDENT (4)
 
+
+/*---------------.
+| Error stream.  |
+`---------------*/
+
+/** Print a message on the error stream.  */
+int err_printf (const char *msg, ...);
+
+/** Put a character in the error stream.  */
+int err_putc (char c);
+
+/** Flush the error stream.  */
+void err_flush (void);
+
+
 /*-------------.
 | --warnings.  |
 `-------------*/

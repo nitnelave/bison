@@ -64,7 +64,7 @@
   static YYLTYPE lloc_default (YYLTYPE const *, int);
 
   #define YY_LOCATION_PRINT(File, Loc)            \
-    location_print (Loc, File)
+    location_print (Loc)
 
   /* Strip initial '{' and final '}' (must be first and last characters).
      Return the result.  */

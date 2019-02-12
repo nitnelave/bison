@@ -19,13 +19,14 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include <config.h>
+#include "location.h"
+
 #include "system.h"
 
 #include <mbswidth.h>
 #include <quotearg.h>
 
 #include "complain.h"
-#include "location.h"
 
 location const empty_location = EMPTY_LOCATION_INIT;
 
@@ -98,40 +99,40 @@ location_compute (location *loc, boundary *cur, char const *token, size_t size)
 
 
 unsigned
-location_print (location loc, FILE *out)
+location_print (location loc)
 {
   unsigned res = 0;
   int end_col = 0 != loc.end.column ? loc.end.column - 1 : 0;
-  res += fprintf (out, "%s",
-                  quotearg_n_style (3, escape_quoting_style, loc.start.file));
+  res += err_printf ("%s",
+                     quotearg_n_style (3, escape_quoting_style, loc.start.file));
   if (0 <= loc.start.line)
     {
-      res += fprintf (out, ":%d", loc.start.line);
+      res += err_printf (":%d", loc.start.line);
       if (0 <= loc.start.column)
-        res += fprintf (out, ".%d", loc.start.column);
+        res += err_printf (".%d", loc.start.column);
     }
   if (loc.start.file != loc.end.file)
     {
-      res += fprintf (out, "-%s",
-                      quotearg_n_style (3, escape_quoting_style,
-                                        loc.end.file));
+      res += err_printf ("-%s",
+                         quotearg_n_style (3, escape_quoting_style,
+                                           loc.end.file));
       if (0 <= loc.end.line)
         {
-          res += fprintf (out, ":%d", loc.end.line);
+          res += err_printf (":%d", loc.end.line);
           if (0 <= end_col)
-            res += fprintf (out, ".%d", end_col);
+            res += err_printf (".%d", end_col);
         }
     }
   else if (0 <= loc.end.line)
     {
       if (loc.start.line < loc.end.line)
         {
-          res += fprintf (out, "-%d", loc.end.line);
+          res += err_printf ("-%d", loc.end.line);
           if (0 <= end_col)
-            res += fprintf (out, ".%d", end_col);
+            res += err_printf (".%d", end_col);
         }
       else if (0 <= end_col && loc.start.column < end_col)
-        res += fprintf (out, "-%d", end_col);
+        res += err_printf ("-%d", end_col);
     }
 
   return res;
@@ -160,10 +161,8 @@ caret_free ()
 }
 
 void
-location_caret (location loc, FILE *out)
+location_caret (location loc)
 {
-  /* FIXME: find a way to support multifile locations, and only open once each
-     file. That would make the procedure future-proof.  */
   if (! (caret_info.source
          || (caret_info.source = fopen (loc.start.file, "r")))
       || loc.start.column == -1 || loc.start.line == -1)
@@ -193,11 +192,13 @@ location_caret (location loc, FILE *out)
     if (c != EOF)
       {
         /* Quote the file, indent by a single column.  */
-        putc (' ', out);
+        err_putc (' ');
         do
-          putc (c, out);
+          {
+            err_putc (c);
+          }
         while ((c = getc (caret_info.source)) != EOF && c != '\n');
-        putc ('\n', out);
+        err_putc ('\n');
 
         {
           /* The caret of a multiline location ends with the first line.  */
@@ -207,11 +208,11 @@ location_caret (location loc, FILE *out)
           int i;
 
           /* Print the carets (at least one), with the same indent as above.*/
-          fprintf (out, " %*s", loc.start.column - 1, "");
+          err_printf (" %*s", loc.start.column - 1, "");
           for (i = loc.start.column; i == loc.start.column || i < len; ++i)
-            putc (i == loc.start.column ? '^' : '~', out);
+            err_putc (i == loc.start.column ? '^' : '~');
           }
-        putc ('\n', out);
+        err_putc ('\n');
       }
   }
 }

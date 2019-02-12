@@ -61,7 +61,37 @@ typedef enum
 /** For each warning type, its severity.  */
 static severity warnings_flag[warnings_size];
 
-static unsigned *indent_ptr = 0;
+static unsigned *indent_ptr = NULL;
+
+static int
+err_vprintf (const char *msg, va_list args)
+{
+  return vfprintf (stderr, msg, args);
+}
+
+int
+err_printf (const char *msg, ...)
+{
+  va_list args;
+  va_start (args, msg);
+  int res = err_vprintf (msg, args);
+  va_end (args);
+  return res;
+}
+
+int
+err_putc (char c)
+{
+  fputc (c, stderr);
+  return 1;
+}
+
+void
+err_flush (void)
+{
+  fflush (stderr);
+}
+
 
 /*------------------------.
 | --warnings's handling.  |
@@ -229,19 +259,21 @@ warning_is_unset (warnings flags)
   return true;
 }
 
-/** Display a "[-Wyacc]" like message on \a f.  */
+/** Display a "[-Wyacc]" like message on the error stream.  */
 
 static void
-warnings_print_categories (warnings warn_flags, FILE *f)
+warnings_print_categories (warnings warn_flags)
 {
   /* Display only the first match, the second is "-Wall".  */
   for (size_t i = 0; warnings_args[i]; ++i)
     if (warn_flags & warnings_types[i])
       {
         severity s = warning_severity (warnings_types[i]);
-        fprintf (f, " [-W%s%s]",
-                 s == severity_error ? "error=" : "",
-                 warnings_args[i]);
+        err_printf (" [");
+        err_printf ("-W%s%s",
+                   s == severity_error ? "error=" : "",
+                   warnings_args[i]);
+        err_printf ("]");
         return;
       }
 }
@@ -251,7 +283,8 @@ warnings_print_categories (warnings warn_flags, FILE *f)
  * \param loc     the location, defaulting to the current file,
  *                or the program name.
  * \param flags   the category for this message.
- * \param prefix  put before the message (e.g., "warning").
+ * \param sever   to decide the prefix to put before the message
+ *                (e.g., "warning").
  * \param message the error message, a printf format string.  Iff it
  *                ends with ": ", then no trailing newline is printed,
  *                and the caller should print the remaining
@@ -260,48 +293,53 @@ warnings_print_categories (warnings warn_flags, FILE *f)
  */
 static
 void
-error_message (const location *loc, warnings flags, const char *prefix,
+error_message (const location *loc, warnings flags, severity sever,
                const char *message, va_list args)
 {
   unsigned pos = 0;
 
   if (loc)
-    pos += location_print (*loc, stderr);
+    pos += location_print (*loc);
   else
-    pos += fprintf (stderr, "%s", current_file ? current_file : program_name);
-  pos += fprintf (stderr, ": ");
+    pos += err_printf ("%s", current_file ? current_file : program_name);
+  pos += err_printf (": ");
 
   if (indent_ptr)
     {
       if (*indent_ptr)
-        prefix = NULL;
+        sever = severity_disabled;
       if (!*indent_ptr)
         *indent_ptr = pos;
       else if (*indent_ptr > pos)
-        fprintf (stderr, "%*s", *indent_ptr - pos, "");
+        err_printf ("%*s", *indent_ptr - pos, "");
       indent_ptr = NULL;
     }
 
-  if (prefix)
-    fprintf (stderr, "%s: ", prefix);
+  if (sever != severity_disabled)
+    {
+      err_printf ("%s: ",
+                  sever == severity_fatal ? _("fatal error")
+                  : sever == severity_error ? _("error")
+                  : _("warning"));
+    }
 
-  vfprintf (stderr, message, args);
+  err_vprintf (message, args);
   /* Print the type of warning, only if this is not a sub message
      (in which case the prefix is null).  */
-  if (! (flags & silent) && prefix)
-    warnings_print_categories (flags, stderr);
+  if (! (flags & silent) && sever != severity_disabled)
+    warnings_print_categories (flags);
 
   {
     size_t l = strlen (message);
     if (l < 2 || message[l - 2] != ':' || message[l - 1] != ' ')
       {
-        putc ('\n', stderr);
-        fflush (stderr);
+        err_printf ("\n");
+        err_flush ();
         if (loc && feature_flag & feature_caret && !(flags & no_caret))
-          location_caret (*loc, stderr);
+          location_caret (*loc);
       }
   }
-  fflush (stderr);
+  err_flush ();
 }
 
 /** Raise a complaint. That can be a fatal error, an error or just a
@@ -317,13 +355,9 @@ complains (const location *loc, warnings flags, const char *message,
 
   if (severity_warning <= s)
     {
-      const char* prefix =
-        s == severity_fatal ? _("fatal error")
-        : s == severity_error ? _("error")
-        : _("warning");
       if (severity_error <= s && ! complaint_status)
         complaint_status = status_warning_as_error;
-      error_message (loc, flags, prefix, message, args);
+      error_message (loc, flags, s, message, args);
     }
 
   if (flags & fatal)
