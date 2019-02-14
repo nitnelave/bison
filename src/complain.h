@@ -35,6 +35,12 @@ int err_printf (const char *msg, ...);
 /** Put a character in the error stream.  */
 int err_putc (char c);
 
+/** Enable a style on the error stream.  */
+void err_begin_use_class (const char *style);
+
+/** Disable a style on the error stream.  */
+void err_end_use_class (const char *style);
+
 /** Flush the error stream.  */
 void err_flush (void);
 
@@ -161,5 +167,8 @@ typedef enum
 
 /** Whether an error was reported.  */
 extern err_status complaint_status;
+
+/** Relase resources.  */
+void complain_free (void);
 
 #endif /* !COMPLAIN_H_ */

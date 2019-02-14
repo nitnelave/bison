@@ -26,6 +26,10 @@
 #include <stdarg.h>
 #include <progname.h>
 
+#if HAVE_LIBTEXTSTYLE
+# include <textstyle.h>
+#endif
+
 #include "complain.h"
 #include "files.h"
 #include "fixits.h"
@@ -63,10 +67,29 @@ static severity warnings_flag[warnings_size];
 
 static unsigned *indent_ptr = NULL;
 
+#if HAVE_LIBTEXTSTYLE
+styled_ostream_t errstream = NULL;
+static struct obstack err_obstack;
+#endif
+
 static int
 err_vprintf (const char *msg, va_list args)
 {
+#if HAVE_LIBTEXTSTYLE
+  static bool init = false;
+  if (!init)
+    {
+      obstack_init (&err_obstack);
+      init = true;
+    }
+  int res = obstack_vprintf (&err_obstack, msg, args);
+  char *cp = obstack_finish0 (&err_obstack);
+  ostream_write_str (errstream, cp);
+  obstack_free (&err_obstack, cp);
+  return res;
+#else
   return vfprintf (stderr, msg, args);
+#endif
 }
 
 int
@@ -82,16 +105,45 @@ err_printf (const char *msg, ...)
 int
 err_putc (char c)
 {
+#if HAVE_LIBTEXTSTYLE
+  err_printf ("%c", c);
+#else
   fputc (c, stderr);
+#endif
   return 1;
+}
+
+void
+err_begin_use_class (const char *s)
+{
+#if HAVE_LIBTEXTSTYLE
+  if (color_mode != color_no)
+    styled_ostream_begin_use_class (errstream, s);
+#else
+  (void) s;
+#endif
+}
+
+void
+err_end_use_class (const char *s)
+{
+#if HAVE_LIBTEXTSTYLE
+  if (color_mode != color_no)
+    styled_ostream_end_use_class (errstream, s);
+#else
+  (void) s;
+#endif
 }
 
 void
 err_flush (void)
 {
+#if HAVE_LIBTEXTSTYLE
+  ostream_flush (errstream);
+#else
   fflush (stderr);
+#endif
 }
-
 
 /*------------------------.
 | --warnings's handling.  |
@@ -195,6 +247,23 @@ warnings_argmatch (char *args)
     warning_argmatch ("all", 0, 0);
 }
 
+static const char*
+severity_style (severity s)
+{
+  switch (s)
+    {
+    case severity_disabled:
+    case severity_unset:
+      return "note";
+    case severity_warning:
+      return "warning";
+    case severity_error:
+    case severity_fatal:
+      return "error";
+    }
+  abort ();
+}
+
 
 /*-----------.
 | complain.  |
@@ -213,6 +282,15 @@ complain_init (void)
                           : severity_unset);
       errority_flag[b] = errority_unset;
     }
+
+#if HAVE_LIBTEXTSTYLE
+  style_file_prepare ("BISON_DIAGNOSTICS_STYLE", NULL,
+                      pkgdatadir (),
+                      "diagnostics.css");
+  errstream =
+    styled_ostream_create (STDERR_FILENO, "(stderr)", TTYCTL_AUTO,
+                           style_file_name);
+#endif
 }
 
 
@@ -270,9 +348,12 @@ warnings_print_categories (warnings warn_flags)
       {
         severity s = warning_severity (warnings_types[i]);
         err_printf (" [");
+        const char* style = severity_style (s);
+        err_begin_use_class (style);
         err_printf ("-W%s%s",
                    s == severity_error ? "error=" : "",
                    warnings_args[i]);
+        err_end_use_class (style);
         err_printf ("]");
         return;
       }
@@ -315,12 +396,17 @@ error_message (const location *loc, warnings flags, severity sever,
       indent_ptr = NULL;
     }
 
+  const char* style = severity_style (sever);
+
   if (sever != severity_disabled)
     {
-      err_printf ("%s: ",
+      err_begin_use_class (style);
+      err_printf ("%s:",
                   sever == severity_fatal ? _("fatal error")
                   : sever == severity_error ? _("error")
                   : _("warning"));
+      err_end_use_class (style);
+      err_putc (' ');
     }
 
   err_vprintf (message, args);
@@ -336,7 +422,7 @@ error_message (const location *loc, warnings flags, severity sever,
         err_printf ("\n");
         err_flush ();
         if (loc && feature_flag & feature_caret && !(flags & no_caret))
-          location_caret (*loc);
+          location_caret (*loc, style);
       }
   }
   err_flush ();
@@ -461,4 +547,13 @@ duplicate_rule_directive (char const *directive,
   complain_indent (&first, complaint, &i,
                    _("previous declaration"));
   fixits_register (&second, "");
+}
+
+void
+complain_free (void)
+{
+  caret_free ();
+#if HAVE_LIBTEXTSTYLE
+  obstack_free (&err_obstack, NULL);
+#endif
 }

@@ -113,7 +113,7 @@ unsigned location_print (location loc);
 void caret_free (void);
 
 /* Output to stderr the line and caret corresponding to location LOC.  */
-void location_caret (location loc);
+void location_caret (location loc, const char* style);
 
 /* Return -1, 0, 1, depending whether a is before, equal, or
    after b.  */

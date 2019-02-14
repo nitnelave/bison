@@ -31,6 +31,10 @@
 #include <progname.h>
 #include <quote.h>
 
+#if HAVE_LIBTEXTSTYLE
+# include <textstyle.h>
+#endif
+
 #include "complain.h"
 #include "files.h"
 #include "muscle-tab.h"
@@ -501,10 +505,12 @@ static char const short_options[] =
 /* Values for long options that do not have single-letter equivalents.  */
 enum
 {
-  LOCATIONS_OPTION = CHAR_MAX + 1,
-  PRINT_LOCALEDIR_OPTION,
+  COLOR_OPTION = CHAR_MAX + 1,
+  LOCATIONS_OPTION,
   PRINT_DATADIR_OPTION,
-  REPORT_FILE_OPTION
+  PRINT_LOCALEDIR_OPTION,
+  REPORT_FILE_OPTION,
+  STYLE_OPTION
 };
 
 static struct option const long_options[] =
@@ -531,7 +537,9 @@ static struct option const long_options[] =
   { "verbose",     no_argument,         0,   'v' },
 
   /* Hidden. */
-  { "trace",         optional_argument,   0,     'T' },
+  { "trace",       optional_argument,   0,  'T' },
+  { "color",       optional_argument,   0,  COLOR_OPTION },
+  { "style",       optional_argument,   0,  STYLE_OPTION },
 
   /* Output.  */
   { "defines",     optional_argument,   0,   'd' },
@@ -723,6 +731,12 @@ getargs (int argc, char *argv[])
         yacc_loc = command_line_location ();
         break;
 
+      case COLOR_OPTION:
+#if HAVE_LIBTEXTSTYLE
+        handle_color_option (optarg);
+#endif
+        break;
+
       case LOCATIONS_OPTION:
         muscle_percent_define_ensure ("locations",
                                       command_line_location (), true);
@@ -739,6 +753,12 @@ getargs (int argc, char *argv[])
       case REPORT_FILE_OPTION:
         free (spec_verbose_file);
         spec_verbose_file = xstrdup (AS_FILE_NAME (optarg));
+        break;
+
+      case STYLE_OPTION:
+#if HAVE_LIBTEXTSTYLE
+        handle_style_option (optarg);
+#endif
         break;
 
       default:

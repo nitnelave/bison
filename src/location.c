@@ -161,7 +161,7 @@ caret_free ()
 }
 
 void
-location_caret (location loc)
+location_caret (location loc, const char *style)
 {
   if (! (caret_info.source
          || (caret_info.source = fopen (loc.start.file, "r")))
@@ -193,9 +193,15 @@ location_caret (location loc)
       {
         /* Quote the file, indent by a single column.  */
         err_putc (' ');
+        int col = 0;
         do
           {
+            ++col;
+            if (col == loc.start.column)
+              err_begin_use_class (style);
             err_putc (c);
+            if (col + 1 == loc.end.column)
+              err_end_use_class (style);
           }
         while ((c = getc (caret_info.source)) != EOF && c != '\n');
         err_putc ('\n');
@@ -209,8 +215,10 @@ location_caret (location loc)
 
           /* Print the carets (at least one), with the same indent as above.*/
           err_printf (" %*s", loc.start.column - 1, "");
+          err_begin_use_class (style);
           for (i = loc.start.column; i == loc.start.column || i < len; ++i)
             err_putc (i == loc.start.column ? '^' : '~');
+          err_end_use_class (style);
           }
         err_putc ('\n');
       }
