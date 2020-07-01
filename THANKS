@@ -4,12 +4,15 @@ it is today without the invaluable help of these people:
 Aaro Koskinen             aaro.koskinen@iki.fi
 Аскар Сафин               safinaskar@mail.ru
 Adam Sampson              ats@offog.org
+Adrian Vogelsgesang       avogelsgesang@tableau.com
+Ahcheong Lee              dkcjd2000@gmail.com
 Airy Andre                Airy.Andre@edf.fr
-Akim Demaille             akim@lrde.epita.fr
+Akim Demaille             akim@gnu.org
 Albert Chin-A-Young       china@thewrittenword.com
 Alexander Belopolsky      alexb@rentec.com
 Alexandre Duret-Lutz      adl@lrde.epita.fr
 Andre da Costa Barros     andre.cbarros@yahoo.com
+Andreas Damm              adamm@onica.com
 Andreas Schwab            schwab@suse.de
 Andrew Suffield           asuffield@users.sourceforge.net
 Angelo Borsotti           angelo.borsotti@gmail.com
@@ -17,6 +20,7 @@ Anthony Heading           ajrh@ajrh.net
 Antonio Silva Correia     amsilvacorreia@hotmail.com
 Arnold Robbins            arnold@skeeve.com
 Art Haas                  ahaas@neosoft.com
+Arthur Schwarz            aschwarz1309@att.net
 Askar Safin               safinaskar@mail.ru
 Balázs Scheidler          balazs.scheidler@oneidentity.com
 Baron Schwartz            baron@sequent.org
@@ -33,6 +37,7 @@ Bruce Lilly               blilly@erols.com
 Bruno Haible              bruno@clisp.org
 Charles-Henri de Boysson  de-boy_c@epita.fr
 Christian Burger          cburger@sunysb.edu
+Clément Démoulins         demoulins@lrde.epita.fr
 Colin Daley               colin.daley@outlook.com
 Cris Bailiff              c.bailiff+bison@awayweb.com
 Cris van Pelt             cris@amf03054.office.wxs.nl
@@ -53,11 +58,15 @@ Derek M. Jones            derek@knosof.co.uk
 Di-an Jan                 dianj@freeshell.org
 Dick Streefland           dick.streefland@altium.nl
 Didier Godefroy           dg@ulysium.net
+Don Macpherson            donmac703@gmail.com
+Dwight Guth               dwight.guth@runtimeverification.com
 Efi Fogel                 efifogel@gmail.com
 Enrico Scholz             enrico.scholz@informatik.tu-chemnitz.de
 Eric Blake                ebb9@byu.net
 Eric S. Raymond           esr@thyrsus.com
 Étienne Renault           renault@lrde.epita.fr
+Evan Lavelle              eml-bison@cyconix.com
+Evan Nemerson             evan@nemerson.com
 Evgeny Stambulchik        fnevgeny@plasma-gate.weizmann.ac.il
 Fabrice Bauzac            noon@cote-dazur.com
 Ferdinand Thiessen        ferdinand@fthiessen.de
@@ -66,6 +75,7 @@ Frank Heckenbach          frank@g-n-u.de
 Frans Englich             frans.englich@telia.com
 Gabriel Rassoul           gabriel.rassoul@epita.fr
 Gary L Peskin             garyp@firstech.com
+Gavin Smith               gavinsmith0123@gmail.com
 Georg Sauthoff            gsauthof@TechFak.Uni-Bielefeld.DE
 George Neuner             gneuner2@comcast.net
 Gilles Espinasse          g.esp@free.fr
@@ -74,8 +84,10 @@ Guido Trentalancia        trentalg@aston.ac.uk
 H. Merijn Brand           h.m.brand@hccnet.nl
 Hans Åberg                haberg-1@telia.com
 Horst Von Brand           vonbrand@inf.utfsm.cl
+Jacob L. Mandelson        jlm-bbison@jlm.ofb.net
 Jan Nieuwenhuizen         janneke@gnu.org
 Jannick                   thirdedition@gmx.net
+Jeff Hammond              jeff_hammond@acm.org
 Jerry Quinn               jlquinn@optonline.net
 Jesse Thilo               jthilo@gnu.org
 Jim Kent                  jkent@arch.sel.sony.com
@@ -87,16 +99,21 @@ Jonathan Fabrizio         jonathan.fabrizio@lrde.epita.fr
 Jonathan Nieder           jrnieder@gmail.com
 Josh Soref                jsoref@gmail.com
 Juan Manuel Guerrero      juan.guerrero@gmx.de
+Karl Berry                karl@freefriends.org
 Kees Zeelenberg           kzlg@users.sourceforge.net
 Keith Browne              kbrowne@legato.com
 Ken Moffat                zarniwhoop@ntlworld.com
 Kiyoshi Kanazawa          yoi_no_myoujou@yahoo.co.jp
+Lars Maier                lars.maier@tefax.net
+László Várady             laszlo.varady93@gmail.com
 Laurent Mascherpa         laurent.mascherpa@epita.fr
 Lie Yan                   lie.yan@kaust.edu.sa
 Magnus Fromreide          magfr@lysator.liu.se
 Marc Autret               autret_m@epita.fr
 Marc Mendiola             mmendiol@usc.edu
+Marc Schönefeld           marc.schoenefeld@gmx.org
 Mark Boyall               wolfeinstein@gmail.com
+Martin Blais              blais@furius.ca
 Martin Jacobs             martin.jacobs@arcor.de
 Martin Mokrejs            mmokrejs@natur.cuni.cz
 Martin Nylin              martin.nylin@linuxmail.org
@@ -116,10 +133,12 @@ Mike Sullivan             Mike.sullivan@Oracle.COM
 Nate Guerin               nathan.guerin@riseup.net
 Neil Booth                NeilB@earthling.net
 Nelson H. F. Beebe        beebe@math.utah.edu
+neok m4700                neok.m4700@gmail.com
 Nick Bowler               nbowler@elliptictech.com
 Nicolas Bedon             nicolas.bedon@univ-rouen.fr
 Nicolas Burrus            nicolas.burrus@epita.fr
 Nicolas Tisserand         nicolas.tisserand@epita.fr
+Nikki Valen               nicolettavalencia.nv@gmail.com
 Noah Friedman             friedman@gnu.org
 Odd Arild Olsen           oao@fibula.no
 Oleg Smolsky              oleg.smolsky@pacific-simulators.co.nz
@@ -128,6 +147,7 @@ Oliver Mangold            o.mangold@gmail.com
 Paolo Bonzini             bonzini@gnu.org
 Paolo Simone Gasparello   djgaspa@gmail.com
 Pascal Bart               pascal.bart@epita.fr
+Patrice Dumas             pertusus@free.fr
 Paul Eggert               eggert@cs.ucla.edu
 Paul Hilfinger            Hilfinger@CS.Berkeley.EDU
 Per Allansson             per@appgate.com
@@ -139,11 +159,13 @@ Petr Machata              pmachata@redhat.com
 Pho                       pho@cielonegro.org
 Piotr Gackiewicz          gacek@intertel.com.pl
 Piotr Marcińczyk          piomar123@gmail.com
+Pramod Kumbhar            pramod.s.kumbhar@gmail.com
 Quentin Hocquet           hocquet@gostai.com
 Quoc Peyrot               chojin@lrde.epita.fr
 R Blake                   blakers@mac.com
 Raja R Harinath           harinath@cs.umn.edu
 Ralf Wildenhues           Ralf.Wildenhues@gmx.de
+Ryan                      dev@splintermail.com
 Rich Wilson               richaw@gmail.com
 Richard Stallman          rms@gnu.org
 Rici Lake                 ricilake@gmail.com
@@ -166,16 +188,22 @@ Sum Wu                    sum@geekhouse.org
 Théophile Ranquet         theophile.ranquet@gmail.com
 Thiru Ramakrishnan        thiru.ramakrishnan@gmail.com
 Thomas Jahns              jahns@dkrz.de
+Thomas Petazzoni          thomas.petazzoni@bootlin.com
 Tim Josling               tej@melbpc.org.au
 Tim Landscheidt           tim@tim-landscheidt.de
 Tim Van Holder            tim.van.holder@pandora.be
 Tobias Frost              tobi@debian.org
+Todd Freed                todd.freed@gmail.com
+Tom Kramer                kramer@nist.gov
 Tom Lane                  tgl@sss.pgh.pa.us
 Tom Tromey                tromey@cygnus.com
+Tomasz Kłoczko            kloczko.tomasz@gmail.com
 Tommy Nordgren            tommy.nordgren@chello.se
 Troy A. Johnson           troyj@ecn.purdue.edu
 Tys Lefering              gccbison@gmail.com
+Uxio Prego                uxio@uma.es
 Valentin Tolmer           nitnelave1@gmail.com
+wcventure                 wcventure@126.com
 Victor Khomenko           victor.khomenko@newcastle.ac.uk
 Victor Zverovich          victor.zverovich@gmail.com
 Vin Shelton               acs@alumni.princeton.edu
@@ -188,8 +216,12 @@ Wolfgang Thaller          wolfgang.thaller@gmx.net
 Wolfram Wagner            ww@mpi-sb.mpg.de
 Wwp                       subscript@free.fr
 xolodho                   xolodho@gmail.com
+Yuichiro Kaneko           spiketeika@gmail.com
+Yuriy Solodkyy            solodon@gmail.com
 Zack Weinberg             zack@codesourcery.com
+江 祖铭                    jjzuming@outlook.com
 長田偉伸                   cbh34680@iret.co.jp
+马俊                       majun123@whu.edu.cn
 
 Many people are not named here because we lost track of them.  We
 thank them!  Please, help us keeping this list up to date.
@@ -201,7 +233,7 @@ End:
 
 -----
 
-Copyright (C) 2000-2015, 2018-2019 Free Software Foundation, Inc.
+Copyright (C) 2000-2015, 2018-2020 Free Software Foundation, Inc.
 
 This file is part of Bison, the GNU Parser Generator.
 

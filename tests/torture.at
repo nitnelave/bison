@@ -1,6 +1,6 @@
 # Torturing Bison.                                    -*- Autotest -*-
 
-# Copyright (C) 2001-2002, 2004-2007, 2009-2015, 2018-2019 Free Software
+# Copyright (C) 2001-2002, 2004-2007, 2009-2015, 2018-2020 Free Software
 # Foundation, Inc.
 
 # This program is free software: you can redistribute it and/or modify
@@ -27,7 +27,7 @@ m4_define([AT_INCREASE_DATA_SIZE],
 case $data_limit in
 [[0-9]]*)
   if test "$data_limit" -lt $1; then
-    AT_CHECK([ulimit -S -d $1 || exit 77])
+    AT_REQUIRE([ulimit -S -d $1])
     ulimit -S -d $1
   fi
 esac])
@@ -120,7 +120,7 @@ EOF
 ]])
 AT_BISON_OPTION_POPDEFS
 
-AT_CHECK([$PERL -w ./gengram.pl $2 || exit 77], 0, [stdout])
+AT_PERL_REQUIRE([-w ./gengram.pl $2], 0, [stdout])
 mv stdout $1
 ])
 
@@ -203,7 +203,7 @@ yylex (void)
 EOF
 ]])
 
-AT_CHECK([$PERL -w ./gengram.pl $2 || exit 77], 0, [stdout])
+AT_PERL_REQUIRE([-w ./gengram.pl $2], 0, [stdout])
 mv stdout $1
 AT_BISON_OPTION_POPDEFS
 ])
@@ -233,13 +233,55 @@ AT_DATA_HORIZONTAL_GRAMMAR([input.y], [1000])
 # Ask for 200 MiB, which should be plenty even on a 64-bit host.
 AT_INCREASE_DATA_SIZE(204000)
 
-AT_BISON_CHECK_NO_XML([-v -o input.c input.y])
+AT_BISON_CHECK_NO_XML([-o input.c input.y])
 AT_COMPILE([input])
 AT_PARSER_CHECK([input])
 
 AT_CLEANUP
 
 
+
+## ------------------- ##
+## State number type.  ##
+## ------------------- ##
+
+# AT_TEST(NUM-STATES, TYPE)
+# -------------------------
+# Check that automaton with NUM-STATES uses TYPE has state number type.
+# Check that parser works.
+
+m4_pushdef([AT_TEST],
+[AT_SETUP([State number type: $1 states])
+
+AT_BISON_OPTION_PUSHDEFS
+
+AT_REQUIRE([ruby $abs_top_srcdir/tests/linear $1 >input.y])
+# Old versions of GCC reject large values given to #line.
+AT_FULL_COMPILE([input], [], [], [], [--no-line])
+AT_CHECK([[sed -ne 's/#define YYNSTATES  *\([0-9]*\)/\1/p' input.c]],   [], [$1
+])
+AT_CHECK([[sed -ne 's/typedef \(.*\) yy_state_t;/\1/p' input.c]], [], [$2
+])
+AT_PARSER_CHECK([input])
+
+AT_BISON_OPTION_POPDEFS
+AT_CLEANUP])
+
+AT_TEST(  [128], [yytype_int8])
+AT_TEST(  [129], [yytype_uint8])
+AT_TEST(  [256], [yytype_uint8])
+AT_TEST(  [257], [yytype_int16])
+AT_TEST([32768], [yytype_int16])
+AT_TEST([65536], [yytype_uint16])
+AT_TEST([65537], [int])
+
+m4_popdef([AT_TEST])
+
+
+
+## ------------------------ ##
+## Many lookahead tokens.   ##
+## ------------------------ ##
 
 # AT_DATA_LOOKAHEAD_TOKENS_GRAMMAR(FILE-NAME, SIZE)
 # --------------------------------------------------
@@ -335,15 +377,10 @@ yylex (void)
 EOF
 ]])
 
-AT_CHECK([$PERL -w ./gengram.pl $2 || exit 77], 0, [stdout])
+AT_PERL_REQUIRE([-w ./gengram.pl $2], 0, [stdout])
 mv stdout $1
 AT_BISON_OPTION_POPDEFS
 ])
-
-
-## ------------------------ ##
-## Many lookahead tokens.   ##
-## ------------------------ ##
 
 AT_SETUP([Many lookahead tokens])
 
@@ -367,7 +404,6 @@ AT_CLEANUP
 m4_define([AT_DATA_STACK_TORTURE],
 [AT_BISON_OPTION_PUSHDEFS([$2])
 # A grammar of parens growing the stack thanks to right recursion.
-# exp:
 AT_DATA_GRAMMAR([input.y],
 [[%{
 #include <errno.h>
@@ -380,10 +416,9 @@ AT_DATA_GRAMMAR([input.y],
 %}
 ]$2[
 %define parse.error verbose
-%debug
 %token WAIT_FOR_EOF
 %%
-exp: WAIT_FOR_EOF exp | ;
+exp: WAIT_FOR_EOF exp | %empty;
 %%
 ]AT_YYERROR_DEFINE[
 #include <assert.h>
@@ -409,7 +444,7 @@ get_args (int argc, const char **argv)
   assert (0 <= res);
   assert (res <= INT_MAX);
   assert (errno != ERANGE);
-  return (int) res;
+  return YY_CAST (int, res);
 }
 
 int
@@ -420,7 +455,7 @@ main (int argc, const char **argv)
   int count;
 ]m4_bmatch([$2], [api.push-pull both],
 [[  yypstate *ps = yypstate_new ();
-]])[  yydebug = 1;
+]])[
   for (count = 0; count < 2; ++count)
     {
       int new_status;
@@ -432,7 +467,7 @@ main (int argc, const char **argv)
         status = new_status;
       else
         assert (new_status == status);
-    }]m4_bmatch([$2], [api.push-pull both],[[
+    }]m4_bmatch([$2], [api.push-pull both], [[
   yypstate_delete (ps);]])[
   return status;
 }

@@ -1,4 +1,4 @@
-## Copyright (C) 2005-2006, 2008-2015, 2018-2019 Free Software
+## Copyright (C) 2005-2006, 2008-2015, 2018-2020 Free Software
 ## Foundation, Inc.
 ##
 ## This program is free software: you can redistribute it and/or modify
@@ -31,6 +31,7 @@ $(calcxx_sources_generated): %D%/parser.stamp
 	@test -f $@ || $(MAKE) $(AM_MAKEFLAGS) %D%/parser.stamp
 CLEANFILES +=					\
   $(calcxx_sources_generated)			\
+  %D%/parser.dot				\
   %D%/parser.output				\
   %D%/parser.stamp				\
   %D%/scanner.cc

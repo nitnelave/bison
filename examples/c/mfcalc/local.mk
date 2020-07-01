@@ -1,4 +1,4 @@
-## Copyright (C) 2005-2006, 2008-2015, 2018-2019 Free Software
+## Copyright (C) 2005-2006, 2008-2015, 2018-2020 Free Software
 ## Foundation, Inc.
 ##
 ## This program is free software: you can redistribute it and/or modify
@@ -31,6 +31,7 @@ nodist_%C%_mfcalc_SOURCES = $(mfcalc_sources)
 %D%/mfcalc.c: $(dependencies)
 # Don't use gnulib's system headers.
 %C%_mfcalc_CPPFLAGS = -I$(top_srcdir)/%D% -I$(top_builddir)/%D%
+%C%_mfcalc_CFLAGS = $(TEST_CFLAGS)
 %C%_mfcalc_LDADD = -lm
 
 dist_TESTS += %D%/mfcalc.test

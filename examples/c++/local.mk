@@ -1,4 +1,4 @@
-## Copyright (C) 2018-2019 Free Software Foundation, Inc.
+## Copyright (C) 2018-2020 Free Software Foundation, Inc.
 ##
 ## This program is free software: you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -68,4 +68,6 @@ endif
 EXTRA_DIST += %D%/variant-11.test
 
 dist_cxx_DATA = %D%/README.md %D%/Makefile %D%/variant.yy %D%/variant-11.yy
-CLEANFILES += %D%/simple.output %D%/variant.output %D%/variant-11.output
+CLEANFILES +=                                                   \
+  %D%/simple.output %D%/variant.output %D%/variant-11.output    \
+  %D%/simple.hh %D%/variant.hh %D%/variant-11.hh

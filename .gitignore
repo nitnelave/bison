@@ -1,12 +1,11 @@
-/build-aux
 *.eps
 *.log
 *.o
 *.pdf
-*.png
 *.stamp
 *.trs
 *~
+.bootstrap*
 .deps
 .dirstamp
 /*.cache
@@ -28,6 +27,7 @@
 /aclocal.m4
 /b.out
 /bison-*
+/build-aux
 /conf[0-9]*
 /confdefs*
 /config.log
@@ -42,4 +42,3 @@
 /patches
 /releases
 /stamp-h*
-.bootstrap*

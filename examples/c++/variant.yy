@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2008-2015, 2018-2019 Free Software Foundation, Inc.
+  Copyright (C) 2008-2015, 2018-2020 Free Software Foundation, Inc.
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -117,7 +117,7 @@ namespace yy
     static int count = 0;
     const int stage = count;
     ++count;
-    parser::location_type loc (NULLPTR, unsigned (stage + 1), unsigned (stage + 1));
+    parser::location_type loc (NULLPTR, stage + 1, stage + 1);
     switch (stage)
       {
       case 0:

@@ -1,6 +1,6 @@
 ## Process this file with automake to produce Makefile.in.
 
-# Copyright (C) 2001-2015, 2018-2019 Free Software Foundation, Inc.
+# Copyright (C) 2001-2015, 2018-2020 Free Software Foundation, Inc.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 AUTOMAKE_OPTIONS = subdir-objects
 ACLOCAL_AMFLAGS = -I m4
 
-SUBDIRS = po runtime-po .
+SUBDIRS = po runtime-po gnulib-po .
 
 # Files installed for use by Automake.
 aclocaldir = @aclocaldir@
@@ -42,7 +42,8 @@ dependencies = $(BISON_IN) $(src_bison_SOURCES) $(dist_skeletons_DATA)
 BISON = $(top_builddir)/tests/bison
 BISON_IN = $(top_srcdir)/tests/bison.in
 YACC = $(BISON) -o y.tab.c
-AM_YFLAGS = -d -v -Werror -Wall -Wno-yacc --report=all
+AM_YFLAGS_WITH_LINES = --defines -Werror -Wall,dangling-alias --report=all
+AM_YFLAGS = $(AM_YFLAGS_WITH_LINES) --no-lines
 
 # Initialization before completion by local.mk's.
 AM_CFLAGS = $(WARN_CFLAGS)
@@ -87,8 +88,21 @@ clean-local:
 BUILT_SOURCES += $(top_srcdir)/.version
 $(top_srcdir)/.version: configure
 	echo $(VERSION) > $@-t && mv $@-t $@
-dist-hook: gen-ChangeLog
+dist-hook: gen-ChangeLog gen-synclines
 	echo $(VERSION) > $(distdir)/.tarball-version
+
+# When generating a release, include the #lines in Bison's parser.  Do it
+# only if needed.  In particular, distcheck runs dist with read-only
+# sources, so don't try to update src/parse-gram.c: we don't have the
+# permissions.
+.PHONY: gen-synclines
+gen-synclines:
+	cd $(distdir) &&						\
+	if ! grep '#line' src/parse-gram.c >/dev/null 2>&1; then	\
+	  $(abs_top_builddir)/tests/bison				\
+	    $(AM_YFLAGS_WITH_LINES) src/parse-gram.y			\
+	    -o src/parse-gram.c;					\
+	fi
 
 .PHONY: update-b4-copyright update-package-copyright-year
 update-b4-copyright:
@@ -113,3 +127,15 @@ gen-ChangeLog:
 	    --since=$(gen_start_date) > $$cl.tmp &&	\
 	  mv -f $$cl.tmp $$cl;				\
 	fi
+
+# Useful to debug.
+.c.i:
+	$(CC) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -o $@ -E $<
+
+.PHONY: codespell
+codespell:
+	$(AM_V_GEN) cd $(srcdir) \
+	&& codespell \
+	     --regex "[\\w\\-'’\`]+\+*" \
+	     --ignore-words-list "ba,circularly,cloneable,copyable,define'd,dout,froms,iff,ifset,od,ois" \
+	     $$(git ls-files data doc lib src tests)

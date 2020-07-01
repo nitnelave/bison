@@ -1,6 +1,6 @@
 # Checking the output filenames.                    -*- Autotest -*-
 
-# Copyright (C) 2000-2002, 2005-2015, 2018-2019 Free Software
+# Copyright (C) 2000-2002, 2005-2015, 2018-2020 Free Software
 # Foundation, Inc.
 
 # This program is free software: you can redistribute it and/or modify
@@ -22,17 +22,18 @@ AT_BANNER([[Output file names.]])
 # -----------------------------------------------
 # Check that the current directory contains FILE... (sorted).
 m4_define([AT_CHECK_FILES],
-[AT_CHECK([[find . -type f |
-           $PERL -ne '
+[AT_REQUIRE([[find . -type f |
+           "$PERL" -ne '
       s,\./,,; chomp;
       push @file, $_ unless m{^($2|testsuite.log)$};
       END { print join (" ", sort @file), "\n" }']],
           [], [$1
 ])])
 
-# AT_CHECK_OUTPUT(INPUT-FILE, [DIRECTIVES], [FLAGS], EXPECTED-FILES, [STATUS],
-#                 [ADDITIONAL-TESTS], [PRE-TESTS])
-# -----------------------------------------------------------------------------
+# AT_CHECK_OUTPUT($1 = INPUT-FILE, $2 = [DIRECTIVES], $3 = [FLAGS],
+#                 $4 = EXPECTED-FILES, $5 = [STATUS],
+#                 $6 = [ADDITIONAL-TESTS], $7 = [PRE-TESTS])
+# -----------------------------------------------------------------
 m4_define([AT_CHECK_OUTPUT],
 [AT_SETUP([[Output files: ]$2 $3])[
 ]$7[
@@ -47,8 +48,12 @@ done
 foo: '0' {};
 ]])
 
-# There is not AT_DATA_UNQUOTED.
-AT_CHECK([$PERL -pi -e 's{\$at_dir}'"{$at_group_dir}g" $1])
+# There is no AT_DATA_UNQUOTED.
+if $EGREP 'at_dir' $1 >/dev/null; then
+   AT_PERL_REQUIRE([-pi -e 's{\$at_dir}'"{$at_group_dir}g" $1])
+   # On Cygwin, up to Perl 5.28, 'perl -pi' left a foo.bak file.
+   AT_CHECK([rm -f $1.bak])
+fi
 
 
 AT_BISON_CHECK([$3 $1], [$5], [], [ignore])[
@@ -69,11 +74,24 @@ AT_CHECK_OUTPUT([foo.y], [], [-dv >&-],
                 [], [],
                 [AT_CHECK([[case "$PREBISON" in *valgrind*) exit 77;; esac]])])
 
+
+# Check how api.header.include.
 AT_CHECK_OUTPUT([foo.y], [], [-dv -o foo.c],
-                [foo.c foo.h foo.output])
+                [foo.c foo.h foo.output], [],
+                [AT_CHECK([grep '#include "foo.h"' foo.c], [0], [ignore])])
+AT_CHECK_OUTPUT([foo.y], [], [-dv -y],
+                [y.output y.tab.c y.tab.h], [],
+                [AT_CHECK([grep '#include "y.tab.h"' y.tab.c], [1], [ignore])])
+AT_CHECK_OUTPUT([foo.y], [%define api.header.include {"./foo.h"}], [-dv -y],
+                [y.output y.tab.c y.tab.h], [],
+                [AT_CHECK([grep '#include "./foo.h"' y.tab.c], [0], [ignore])])
+
+
 AT_CHECK_OUTPUT([foo.y], [], [-dv -o foo.tab.c],
                 [foo.output foo.tab.c foo.tab.h])
 
+AT_CHECK_OUTPUT([foo.y], [], [-dv -g --xml --fixed-output-files],
+                [y.dot y.output y.tab.c y.tab.h y.xml])
 AT_CHECK_OUTPUT([foo.y], [], [-dv -g --xml -y],
                 [y.dot y.output y.tab.c y.tab.h y.xml])
 AT_CHECK_OUTPUT([foo.y], [%require "3.4"], [-dv -g --xml -y],
@@ -255,7 +273,7 @@ m4_define([AT_CHECK_OUTPUT_FILE_NAME],
 AT_BISON_OPTION_PUSHDEFS
 # Skip if platform doesn't support file name.  For example, Cygwin
 # doesn't support file names containing ":" or "\".
-AT_CHECK([[touch "]AS_ESCAPE([$1[.tmp]])[" || exit 77]])
+AT_REQUIRE([[touch "]AS_ESCAPE([$1[.tmp]])["]])
 
 AT_DATA_GRAMMAR([glr.y],
 [[%glr-parser
@@ -668,3 +686,103 @@ imm: '0';
 ]])
 
 m4_popdef([AT_TEST])
+
+
+## -------------------------------- ##
+## C++ Output File Prefix Mapping.  ##
+## -------------------------------- ##
+
+AT_SETUP([C++ Output File Prefix Mapping])
+
+# AT_TEST([PREFIX], [DIRECTIVES])
+m4_pushdef([AT_TEST],
+[AT_BISON_OPTION_PUSHDEFS([%skeleton "lalr1.cc" %define api.namespace {$1} $2])
+AT_LOC_PUSHDEF([begin.line], [begin.column], [end.line], [end.column])
+AT_DATA_GRAMMAR([$1.yy],
+[[%skeleton "lalr1.cc"
+%define api.namespace {$1}
+$2
+%code {
+  ]AT_YYERROR_DECLARE[
+  ]AT_YYLEX_DECLARE[
+}
+%%
+exp: '0';
+%%
+]AT_YYERROR_DEFINE[
+]AT_YYLEX_DEFINE(["0"])[
+]])
+
+AT_BISON_CHECK([-fcaret -o out/$1.cc -M out/=bar/ $1.yy])
+AT_LANG_COMPILE([out/$1.o], [], [-Iout/include])
+
+AT_LOC_POPDEF
+AT_BISON_OPTION_POPDEFS
+])
+
+mkdir -p out/include/ast
+
+AT_TEST([x1],
+        [%defines
+         %locations
+         %define api.location.file "include/ast/loc.hh"
+         ])
+
+# Check the CPP guard and Doxyen comments.
+AT_CHECK([sed -ne 's/#line [0-9]\+ "/#line "/p;/INCLUDED/p;/\\file/{p;n;p;}' out/include/ast/loc.hh], [],
+[[ ** \file bar/include/ast/loc.hh
+ ** Define the x1::location class.
+#ifndef YY_YY_BAR_INCLUDE_AST_LOC_HH_INCLUDED
+# define YY_YY_BAR_INCLUDE_AST_LOC_HH_INCLUDED
+#line "x1.yy"
+#line "bar/include/ast/loc.hh"
+#line "x1.yy"
+#line "bar/include/ast/loc.hh"
+#endif // !YY_YY_BAR_INCLUDE_AST_LOC_HH_INCLUDED
+]])
+
+AT_CHECK([sed -ne 's/^#line [0-9]\+ "/#line "/p;/INCLUDED/p;/\\file/{p;n;p;}' out/x1.hh], [],
+[[ ** \file bar/x1.hh
+ ** Define the x1::parser class.
+#ifndef YY_YY_BAR_X1_HH_INCLUDED
+# define YY_YY_BAR_X1_HH_INCLUDED
+#line "x1.yy"
+#line "bar/x1.hh"
+#line "x1.yy"
+#line "bar/x1.hh"
+#endif // !YY_YY_BAR_X1_HH_INCLUDED
+]])
+
+AT_TEST([x2],
+        [%defines
+         %locations
+         %code requires {#include "include/ast/loc.hh"}
+         %define api.location.type {x1::location}])
+
+m4_popdef([AT_TEST])
+
+AT_DATA([main.cc],
+[AT_DATA_SOURCE_PROLOGUE
+[#include "x1.hh"
+#include "x2.hh"
+
+#define RUN(S)                                  \
+  do {                                          \
+    S::parser parser;                           \
+    int res = parser.parse();                   \
+    if (res)                                    \
+      std::cerr << #S": " << res << '\n';       \
+  } while (false)
+
+int
+main (void)
+{
+  RUN(x1);
+  RUN(x2);
+}
+]])# main.cc
+
+AT_COMPILE_CXX([parser], [[out/x[12].o main.cc]], [-Iout/])
+AT_PARSER_CHECK([parser], [0])
+
+AT_CLEANUP

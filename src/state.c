@@ -1,6 +1,6 @@
 /* Type definitions for the finite state machine for Bison.
 
-   Copyright (C) 2001-2007, 2009-2015, 2018-2019 Free Software
+   Copyright (C) 2001-2007, 2009-2015, 2018-2020 Free Software
    Foundation, Inc.
 
    This file is part of Bison, the GNU Compiler Compiler.
@@ -27,6 +27,7 @@
 
 #include "closure.h"
 #include "complain.h"
+#include "getargs.h"
 #include "gram.h"
 #include "print-xml.h"
 
@@ -77,7 +78,8 @@ errs_new (int num, symbol **tokens)
   size_t symbols_size = num * sizeof *tokens;
   errs *res = xmalloc (offsetof (errs, symbols) + symbols_size);
   res->num = num;
-  memcpy (res->symbols, tokens, symbols_size);
+  if (tokens)
+    memcpy (res->symbols, tokens, symbols_size);
   return res;
 }
 
@@ -124,7 +126,7 @@ state *final_state = NULL;
 
 state *
 state_new (symbol_number accessing_symbol,
-           size_t nitems, item_number *core)
+           size_t nitems, item_index *core)
 {
   aver (nstates < STATE_NUMBER_MAXIMUM);
 
@@ -187,6 +189,21 @@ state_free (state *s)
 }
 
 
+void
+state_transitions_print (const state *s, FILE *out)
+{
+  const transitions *trans = s->transitions;
+  fprintf (out, "transitions of %d (%d):\n",
+           s->number, trans->num);
+  for (int i = 0; i < trans->num; ++i)
+    fprintf (out, "  %d: (%d, %s, %d)\n",
+             i,
+             s->number,
+             symbols[s->transitions->states[i]->accessing_symbol]->tag,
+             s->transitions->states[i]->number);
+}
+
+
 /*---------------------------.
 | Set the transitions of S.  |
 `---------------------------*/
@@ -196,6 +213,8 @@ state_transitions_set (state *s, int num, state **dst)
 {
   aver (!s->transitions);
   s->transitions = transitions_new (num, dst);
+  if (trace_flag & trace_automaton)
+    state_transitions_print (s, stderr);
 }
 
 
@@ -212,13 +231,13 @@ state_reductions_set (state *s, int num, rule **reds)
 
 
 int
-state_reduction_find (state *s, rule const *r)
+state_reduction_find (state const *s, rule const *r)
 {
   reductions *reds = s->reductions;
   for (int i = 0; i < reds->num; ++i)
     if (reds->rules[i] == r)
       return i;
-  return -1;
+  abort ();
 }
 
 
@@ -241,7 +260,7 @@ state_errs_set (state *s, int num, symbol **tokens)
 `--------------------------------------------------*/
 
 void
-state_rule_lookahead_tokens_print (state *s, rule const *r, FILE *out)
+state_rule_lookahead_tokens_print (state const *s, rule const *r, FILE *out)
 {
   /* Find the reduction we are handling.  */
   reductions *reds = s->reductions;
@@ -264,7 +283,7 @@ state_rule_lookahead_tokens_print (state *s, rule const *r, FILE *out)
 }
 
 void
-state_rule_lookahead_tokens_print_xml (state *s, rule const *r,
+state_rule_lookahead_tokens_print_xml (state const *s, rule const *r,
                                        FILE *out, int level)
 {
   /* Find the reduction we are handling.  */
@@ -340,11 +359,11 @@ state_hasher (void const *s, size_t tablesize)
 void
 state_hash_new (void)
 {
-  state_table = hash_initialize (HT_INITIAL_CAPACITY,
-                                 NULL,
-                                 state_hasher,
-                                 state_comparator,
-                                 NULL);
+  state_table = hash_xinitialize (HT_INITIAL_CAPACITY,
+                                  NULL,
+                                  state_hasher,
+                                  state_comparator,
+                                  NULL);
 }
 
 
@@ -366,8 +385,7 @@ state_hash_free (void)
 void
 state_hash_insert (state *s)
 {
-  if (!hash_insert (state_table, s))
-    xalloc_die ();
+  hash_xinsert (state_table, s);
 }
 
 
@@ -377,7 +395,7 @@ state_hash_insert (state *s)
 `------------------------------------------------------------------*/
 
 state *
-state_hash_lookup (size_t nitems, item_number *core)
+state_hash_lookup (size_t nitems, const item_index *core)
 {
   size_t items_size = nitems * sizeof *core;
   state *probe = xmalloc (offsetof (state, items) + items_size);

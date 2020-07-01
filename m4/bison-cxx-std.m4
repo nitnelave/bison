@@ -1,6 +1,6 @@
 # bison-cxx-std.m4 serial 1
 
-# Copyright (C) 2018 Free Software Foundation, # Inc.
+# Copyright (C) 2018-2020 Free Software Foundation, Inc.
 
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -63,6 +63,9 @@ m4_define([_BISON_CXXSTD_11_snippet],
     for (int r: std::set<int>{1, 2})
       continue;
   }
+
+  // GCC 4.8.2 on Solaris 11.3 does not support to_string.
+  auto e = std::to_string(42);
 ])
 
 m4_define([_BISON_CXXSTD_14_snippet],

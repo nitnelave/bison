@@ -16,6 +16,7 @@
 /bison.help
 /bison.html
 /bison.info
+/bison.info.bak
 /bison.log
 /bison.pdf
 /bison.ps
@@ -31,3 +32,5 @@
 /version.texi
 /yacc.1
 /relocatable.texi
+/figs/*.eps
+/figs/*.svg

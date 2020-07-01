@@ -1,6 +1,6 @@
 # Exercising Bison on actual grammars.                   -*- Autotest -*-
 
-# Copyright (C) 1989-1992, 2000-2005, 2007, 2009-2015, 2018-2019 Free
+# Copyright (C) 1989-1992, 2000-2005, 2007, 2009-2015, 2018-2020 Free
 # Software Foundation, Inc.
 
 # This program is free software: you can redistribute it and/or modify
@@ -35,14 +35,9 @@ dnl time comes, just use sed to drop the line numbers.  For now, as LR(1)
 dnl support is rapidly evolving, let's keep that information to be careful.
 dnl However, we don't do diffs for canonical LR(1) because the diff is huge.
 m4_pushdef([AT_LALR1_DIFF_CHECK],
-[dnl We need diff -u, which is not portable.
-AT_CHECK([diff -u /dev/null /dev/null || exit 77], [0], [ignore])
-
-AT_CHECK([[sed 's/^%define lr.type .*$//' input.y > input-lalr.y]])
-AT_BISON_CHECK([[--report=all input-lalr.y]], [[0]], [ignore], [ignore])
-AT_CHECK([[diff -u input-lalr.output input.output \
-           | sed -n '/^@@/,$p' | sed 's/^ $//']],
-         [[0]], [$1])])
+[AT_CHECK([[sed 's/^%define lr.type .*$//' input.y > input-lalr.y]])
+AT_BISON_CHECK([[--report=all,no-cex input-lalr.y]], [[0]], [ignore], [ignore])
+AT_DIFF_U_CHECK([[input-lalr.output input.output]], [$1])])
 
 AT_TEST_TABLES_AND_PARSE([$2[: LALR(1)]], [[LALR]], [[last-state]],
                          [[%define lr.type lalr
@@ -427,18 +422,19 @@ dnl don't like even 'print $!4;'.
 
 dnl BISON-STDERR
 [[input.y:66.10: warning: empty rule without %empty [-Wempty-rule]
-input.y:169.8: warning: empty rule without %empty [-Wempty-rule]
-input.y:174.12: warning: empty rule without %empty [-Wempty-rule]
-input.y:179.13: warning: empty rule without %empty [-Wempty-rule]
-input.y:187.15: warning: empty rule without %empty [-Wempty-rule]
-input.y:201.8: warning: empty rule without %empty [-Wempty-rule]
-input.y:206.21: warning: empty rule without %empty [-Wempty-rule]
-input.y:220.20: warning: empty rule without %empty [-Wempty-rule]
-input.y:299.13: warning: empty rule without %empty [-Wempty-rule]
-input.y:322.9: warning: empty rule without %empty [-Wempty-rule]
+input.y:170.10: warning: empty rule without %empty [-Wempty-rule]
+input.y:175.10: warning: empty rule without %empty [-Wempty-rule]
+input.y:180.10: warning: empty rule without %empty [-Wempty-rule]
+input.y:188.10: warning: empty rule without %empty [-Wempty-rule]
+input.y:202.10: warning: empty rule without %empty [-Wempty-rule]
+input.y:207.10: warning: empty rule without %empty [-Wempty-rule]
+input.y:221.10: warning: empty rule without %empty [-Wempty-rule]
+input.y:300.10: warning: empty rule without %empty [-Wempty-rule]
+input.y:323.10: warning: empty rule without %empty [-Wempty-rule]
 ]AT_COND_CASE([[canonical LR]],
 [[input.y: warning: 265 shift/reduce conflicts [-Wconflicts-sr]]],
 [[input.y: warning: 65 shift/reduce conflicts [-Wconflicts-sr]]])[
+input.y: warning: rerun with option '-Wcounterexamples' to generate conflict counterexamples [-Wother]
 input.y:39.1-5: warning: useless associativity for FUNC_CALL, use %precedence [-Wprecedence]
 input.y:44.1-5: warning: useless associativity for YNUMBER, use %precedence [-Wprecedence]
 input.y:44.1-5: warning: useless associativity for YSTRING, use %precedence [-Wprecedence]
@@ -457,6 +453,7 @@ input.y:47.1-6: warning: useless associativity for UNARY, use %precedence [-Wpre
 input.y:50.1-5: warning: useless associativity for '$', use %precedence [-Wprecedence]
 input.y:51.1-5: warning: useless associativity for '(', use %precedence [-Wprecedence]
 input.y:51.1-5: warning: useless precedence and associativity for ')' [-Wprecedence]
+input.y: warning: fix-its can be applied.  Rerun with option '--update'. [-Wother]
 ]],
 
 dnl LAST-STATE
@@ -1395,39 +1392,41 @@ dnl INPUT
 [[]],
 
 dnl BISON-STDERR
-[[input.y:128.12: warning: empty rule without %empty [-Wempty-rule]
-input.y:137.10: warning: empty rule without %empty [-Wempty-rule]
-input.y:142.8: warning: empty rule without %empty [-Wempty-rule]
-input.y:161.15: warning: empty rule without %empty [-Wempty-rule]
-input.y:179.17: warning: empty rule without %empty [-Wempty-rule]
-input.y:205.16: warning: empty rule without %empty [-Wempty-rule]
-input.y:213.9: warning: empty rule without %empty [-Wempty-rule]
-input.y:225.6: warning: empty rule without %empty [-Wempty-rule]
+[[input.y:128.18: warning: empty rule without %empty [-Wempty-rule]
+input.y:137.18: warning: empty rule without %empty [-Wempty-rule]
+input.y:142.18: warning: empty rule without %empty [-Wempty-rule]
+input.y:161.18: warning: empty rule without %empty [-Wempty-rule]
+input.y:179.18: warning: empty rule without %empty [-Wempty-rule]
+input.y:205.18: warning: empty rule without %empty [-Wempty-rule]
+input.y:213.18: warning: empty rule without %empty [-Wempty-rule]
+input.y:225.18: warning: empty rule without %empty [-Wempty-rule]
 input.y:292.18: warning: empty rule without %empty [-Wempty-rule]
-input.y:294.19: warning: empty rule without %empty [-Wempty-rule]
-input.y:367.16: warning: empty rule without %empty [-Wempty-rule]
-input.y:373.11: warning: empty rule without %empty [-Wempty-rule]
-input.y:387.15: warning: empty rule without %empty [-Wempty-rule]
+input.y:294.20: warning: empty rule without %empty [-Wempty-rule]
+input.y:367.18: warning: empty rule without %empty [-Wempty-rule]
+input.y:373.18: warning: empty rule without %empty [-Wempty-rule]
+input.y:387.18: warning: empty rule without %empty [-Wempty-rule]
 input.y:401.18: warning: empty rule without %empty [-Wempty-rule]
-input.y:413.15: warning: empty rule without %empty [-Wempty-rule]
-input.y:443.15: warning: empty rule without %empty [-Wempty-rule]
-input.y:471.15: warning: empty rule without %empty [-Wempty-rule]
-input.y:474.15: warning: empty rule without %empty [-Wempty-rule]
-input.y:489.15: warning: empty rule without %empty [-Wempty-rule]
-input.y:506.14: warning: empty rule without %empty [-Wempty-rule]
-input.y:587.9: warning: empty rule without %empty [-Wempty-rule]
-input.y:591.14: warning: empty rule without %empty [-Wempty-rule]
+input.y:413.18: warning: empty rule without %empty [-Wempty-rule]
+input.y:443.18: warning: empty rule without %empty [-Wempty-rule]
+input.y:471.18: warning: empty rule without %empty [-Wempty-rule]
+input.y:474.18: warning: empty rule without %empty [-Wempty-rule]
+input.y:489.18: warning: empty rule without %empty [-Wempty-rule]
+input.y:506.18: warning: empty rule without %empty [-Wempty-rule]
+input.y:587.18: warning: empty rule without %empty [-Wempty-rule]
+input.y:591.18: warning: empty rule without %empty [-Wempty-rule]
 ]AT_COND_CASE([[canonical LR]],
 [[input.y: warning: 1876 shift/reduce conflicts [-Wconflicts-sr]
 input.y: warning: 144 reduce/reduce conflicts [-Wconflicts-rr]]],
 [[input.y: warning: 78 shift/reduce conflicts [-Wconflicts-sr]
 input.y: warning: 10 reduce/reduce conflicts [-Wconflicts-rr]]])[
+input.y: warning: rerun with option '-Wcounterexamples' to generate conflict counterexamples [-Wother]
 input.y:72.1-5: warning: useless associativity for HQUA, use %precedence [-Wprecedence]
 input.y:53.1-6: warning: useless associativity for HASSIGN, use %precedence [-Wprecedence]
 input.y:54.1-5: warning: useless associativity for HORELSE, use %precedence [-Wprecedence]
 input.y:55.1-5: warning: useless associativity for HANDTHEN, use %precedence [-Wprecedence]
 input.y:61.1-5: warning: useless associativity for HNOT, use %precedence [-Wprecedence]
 input.y:68.1-5: warning: useless associativity for UNEAR, use %precedence [-Wprecedence]
+input.y: warning: fix-its can be applied.  Rerun with option '--update'. [-Wother]
 ]],
 
 dnl LAST-STATE
@@ -2009,11 +2008,11 @@ dnl without being followed by "of".)
 [[VARIABLE, '=', LABEL, LEFT, DOT_X]],
 
 dnl BISON-STDERR
-[[input.y:202.19: warning: empty rule without %empty [-Wempty-rule]
-input.y:270.6: warning: empty rule without %empty [-Wempty-rule]
-input.y:292.12: warning: empty rule without %empty [-Wempty-rule]
-input.y:309.17: warning: empty rule without %empty [-Wempty-rule]
-input.y:382.13: warning: empty rule without %empty [-Wempty-rule]
+[[input.y:202.20: warning: empty rule without %empty [-Wempty-rule]
+input.y:270.7: warning: empty rule without %empty [-Wempty-rule]
+input.y:292.13: warning: empty rule without %empty [-Wempty-rule]
+input.y:309.18: warning: empty rule without %empty [-Wempty-rule]
+input.y:382.14: warning: empty rule without %empty [-Wempty-rule]
 input.y:471.11-48: warning: rule useless in parser due to conflicts [-Wother]
 input.y:154.1-5: warning: useless associativity for LABEL, use %precedence [-Wprecedence]
 input.y:156.1-5: warning: useless associativity for VARIABLE, use %precedence [-Wprecedence]
@@ -2096,6 +2095,7 @@ input.y:157.1-5: warning: useless associativity for '`', use %precedence [-Wprec
 input.y:159.1-5: warning: useless associativity for '@<:@', use %precedence [-Wprecedence]
 input.y:170.1-5: warning: useless associativity for ',', use %precedence [-Wprecedence]
 input.y:181.1-6: warning: useless associativity for '!', use %precedence [-Wprecedence]
+input.y: warning: fix-its can be applied.  Rerun with option '--update'. [-Wother]
 ]],
 
 dnl LAST-STATE

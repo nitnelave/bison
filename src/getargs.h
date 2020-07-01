@@ -1,6 +1,6 @@
 /* Parse command line arguments for bison.
 
-   Copyright (C) 1984, 1986, 1989, 1992, 2000-2015, 2018-2019 Free
+   Copyright (C) 1984, 1986, 1989, 1992, 2000-2015, 2018-2020 Free
    Software Foundation, Inc.
 
    This file is part of Bison, the GNU Compiler Compiler.
@@ -41,7 +41,7 @@ extern bool no_lines_flag;              /* for -l */
 extern bool token_table_flag;           /* for -k */
 extern location yacc_loc;               /* for -y */
 extern bool update_flag;                /* for -u */
-
+extern bool color_debug;                /* --color=debug. */
 /* GLR_PARSER is true if the input file says to use the GLR
    (Generalized LR) parser, and to output some additional information
    used by the GLR algorithm.  */
@@ -79,6 +79,7 @@ enum report
     report_itemsets         = 1 << 1,
     report_lookahead_tokens = 1 << 2,
     report_solved_conflicts = 1 << 3,
+    report_cex              = 1 << 4,
     report_all              = ~0
   };
 /** What appears in the *.output file.  */
@@ -100,9 +101,13 @@ enum trace
     trace_grammar   = 1 << 7,  /**< Reading, reducing the grammar. */
     trace_time      = 1 << 8,  /**< Time consumption. */
     trace_skeleton  = 1 << 9,  /**< Skeleton postprocessing. */
-    trace_m4        = 1 << 10, /**< M4 traces. */
-    trace_muscles   = 1 << 11, /**< M4 definitions of the muscles. */
-    trace_ielr      = 1 << 12, /**< IELR conversion. */
+    trace_m4_early  = 1 << 10, /**< M4 early traces. */
+    trace_m4        = 1 << 11, /**< M4 traces. */
+    trace_muscles   = 1 << 12, /**< M4 definitions of the muscles. */
+    trace_ielr      = 1 << 13, /**< IELR conversion. */
+    trace_closure   = 1 << 14, /**< Input/output of closure(). */
+    trace_locations = 1 << 15, /**< Full display of locations. */
+    trace_cex       = 1 << 16, /**< Counterexample generation */
     trace_all       = ~0       /**< All of the above.  */
   };
 /** What debug items bison displays during its run.  */
@@ -116,7 +121,7 @@ enum feature
   {
     feature_none             = 0,      /**< No additional feature.  */
     feature_caret            = 1 << 0, /**< Output errors with carets.  */
-    feature_fixit_parsable   = 1 << 1, /**< Issue instructions to fix the sources.  */
+    feature_fixit            = 1 << 1, /**< Issue instructions to fix the sources.  */
     feature_syntax_only      = 1 << 2, /**< Don't generate output.  */
     feature_all              = ~0      /**< All above features.  */
   };

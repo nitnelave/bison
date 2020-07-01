@@ -1,6 +1,6 @@
 /* Bison Grammar Scanner                             -*- C -*-
 
-   Copyright (C) 2002-2015, 2018-2019 Free Software Foundation, Inc.
+   Copyright (C) 2002-2015, 2018-2020 Free Software Foundation, Inc.
 
    This file is part of Bison, the GNU Compiler Compiler.
 
@@ -21,21 +21,23 @@
 %option prefix="gram_" outfile="lex.yy.c"
 
 %{
+#include <errno.h>
+
 #include <c-ctype.h>
 #include <mbswidth.h>
 #include <quote.h>
 #include <quotearg.h>
 
-#include <src/complain.h>
-#include <src/files.h>
-#include <src/getargs.h>
-#include <src/gram.h>
-#include <src/reader.h>
-#include <src/scan-gram.h>
-#include <src/uniqstr.h>
+#include "src/complain.h"
+#include "src/files.h"
+#include "src/getargs.h"
+#include "src/gram.h"
+#include "src/reader.h"
+#include "src/scan-gram.h"
+#include "src/uniqstr.h"
 
 #define FLEX_PREFIX(Id) gram_ ## Id
-#include <src/flex-scanner.h>
+#include "src/flex-scanner.h"
 
 /* Work around a bug in flex 2.5.31.  See Debian bug 333231
    <http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=333231>.  */
@@ -49,10 +51,7 @@ static boundary scanner_cursor;
 
 #define YY_USER_ACTION  location_compute (loc, &scanner_cursor, yytext, yyleng);
 
-static size_t no_cr_read (FILE *, char *, size_t);
-#define YY_INPUT(buf, result, size) ((result) = no_cr_read (yyin, buf, size))
-
-/* Report that yytext is an extension, and evaluate to its token type.  */
+/* Report that yytext is an extension, and evaluate to its token kind.  */
 #define BISON_DIRECTIVE(Directive)                              \
   (bison_directive (loc, yytext), PERCENT_ ## Directive)
 
@@ -71,16 +70,38 @@ static size_t no_cr_read (FILE *, char *, size_t);
 #define ROLLBACK_CURRENT_TOKEN                                  \
   do {                                                          \
     scanner_cursor.column -= mbsnwidth (yytext, yyleng, 0);     \
+    scanner_cursor.byte -= yyleng;                              \
     yyless (0);                                                 \
   } while (0)
 
-#define DEPRECATED(Msg)                                         \
+#define DEPRECATED_DIRECTIVE(Msg)                               \
   do {                                                          \
     deprecated_directive (loc, yytext, Msg);                    \
     scanner_cursor.column -= mbsnwidth (Msg, strlen (Msg), 0);  \
+    scanner_cursor.byte -= strlen (Msg);                        \
     for (size_t i = strlen (Msg); i != 0; --i)                  \
       unput (Msg[i - 1]);                                       \
   } while (0)
+
+
+#define STRING_GROW_ESCAPE(Char)                                \
+  do {                                                          \
+    verify (UCHAR_MAX < ULONG_MAX);                             \
+    long c = Char;                                              \
+    bool valid = 0 < c && c <= UCHAR_MAX;                       \
+    if (!valid)                                                 \
+      complain (loc, complaint,                                 \
+                _("invalid number after \\-escape: %s"),        \
+                yytext + 1);                                    \
+    if (YY_START == SC_ESCAPED_CHARACTER)                       \
+      STRING_1GROW (valid ? c : '?');                           \
+    else                                                        \
+      STRING_GROW ();                                           \
+  } while (0)
+
+
+/* The current file name.  Might change with #line.  */
+static uniqstr current_file = NULL;
 
 /* A string representing the most recently saved token.  */
 static char *last_string = NULL;
@@ -94,11 +115,11 @@ static int bracketed_id_context_state = 0;
 void
 gram_scanner_last_string_free (void)
 {
-  STRING_FREE;
+  STRING_FREE ();
 }
 
 static void handle_syncline (char *, location);
-static unsigned long scan_integer (char const *p, int base, location loc);
+static int scan_integer (char const *p, int base, location loc);
 static int convert_ucn_to_byte (char const *hex_text);
 static void unexpected_eof (boundary, char const *);
 static void unexpected_newline (boundary, char const *);
@@ -106,8 +127,8 @@ static void unexpected_newline (boundary, char const *);
 %}
  /* A C-like comment in directives/rules. */
 %x SC_YACC_COMMENT
- /* Strings and characters in directives/rules. */
-%x SC_ESCAPED_STRING SC_ESCAPED_CHARACTER
+ /* Characters and strings in directives/rules. */
+%x SC_ESCAPED_CHARACTER SC_ESCAPED_STRING SC_ESCAPED_TSTRING
  /* A identifier was just read in directives/rules.  Special state
     to capture the sequence 'identifier :'. */
 %x SC_AFTER_IDENTIFIER
@@ -133,14 +154,18 @@ static void unexpected_newline (boundary, char const *);
 %x SC_BRACKETED_ID SC_RETURN_BRACKETED_ID
 
 letter    [.abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_]
-notletter [^.abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_]{-}[%\{]
 id        {letter}({letter}|[-0-9])*
 int       [0-9]+
 xint      0[xX][0-9abcdefABCDEF]+
 
+eol       \n|\r\n
+
+ /* UTF-8 Encoded Unicode Code Point, from Flex's documentation. */
+mbchar    [\x09\x0A\x0D\x20-\x7E]|[\xC2-\xDF][\x80-\xBF]|\xE0[\xA0-\xBF][\x80-\xBF]|[\xE1-\xEC\xEE\xEF]([\x80-\xBF]{2})|\xED[\x80-\x9F][\x80-\xBF]|\xF0[\x\90-\xBF]([\x80-\xBF]{2})|[\xF1-\xF3]([\x80-\xBF]{3})|\xF4[\x80-\x8F]([\x80-\xBF]{2})
+
 /* Zero or more instances of backslash-newline.  Following GCC, allow
    white space between the backslash and the newline.  */
-splice   (\\[ \f\t\v]*\n)*
+splice   (\\[ \f\t\v]*{eol})*
 
 /* An equal sign, with optional leading whitespaces. This is used in some
    deprecated constructs. */
@@ -157,7 +182,7 @@ eqopt    ({sp}=)?
   int context_state PACIFY_CC (= 0);
 
   /* Location of most recent identifier, when applicable.  */
-  location id_loc PACIFY_CC (= empty_location);
+  location id_loc PACIFY_CC (= empty_loc);
 
   /* Where containing code started, when applicable.  Its initial
      value is relevant only when yylex is invoked in the SC_EPILOGUE
@@ -189,7 +214,7 @@ eqopt    ({sp}=)?
   "," {
      complain (loc, Wother, _("stray ',' treated as white space"));
   }
-  [ \f\n\t\v]  |
+  [ \f\t\v\r]|{eol}  |
   "//".*       continue;
   "/*" {
     token_start = loc->start;
@@ -197,9 +222,7 @@ eqopt    ({sp}=)?
     BEGIN SC_YACC_COMMENT;
   }
 
-  /* #line directives are not documented, and may be withdrawn or
-     modified in future versions of Bison.  */
-  ^"#line "{int}(" \"".*"\"")?"\n" {
+  ^"#line "{int}(" \"".*"\"")?{eol} {
     handle_syncline (yytext + sizeof "#line " - 1, *loc);
   }
 }
@@ -229,7 +252,6 @@ eqopt    ({sp}=)?
   "%expect"                         return BISON_DIRECTIVE (EXPECT);
   "%expect-rr"                      return BISON_DIRECTIVE (EXPECT_RR);
   "%file-prefix"                    RETURN_VALUE (PERCENT_FILE_PREFIX, uniqstr_new (yytext));
-  "%fixed-output-files"             RETURN_VALUE (PERCENT_YACC, uniqstr_new (yytext));
   "%initial-action"                 return BISON_DIRECTIVE (INITIAL_ACTION);
   "%glr-parser"                     return BISON_DIRECTIVE (GLR_PARSER);
   "%language"                       return BISON_DIRECTIVE (LANGUAGE);
@@ -248,7 +270,6 @@ eqopt    ({sp}=)?
   "%prec"                           return PERCENT_PREC;
   "%precedence"                     return BISON_DIRECTIVE (PRECEDENCE);
   "%printer"                        return BISON_DIRECTIVE (PRINTER);
-  "%pure-parser"                    RETURN_PERCENT_FLAG ("api.pure");
   "%require"                        return BISON_DIRECTIVE (REQUIRE);
   "%right"                          return PERCENT_RIGHT;
   "%skeleton"                       return BISON_DIRECTIVE (SKELETON);
@@ -259,7 +280,11 @@ eqopt    ({sp}=)?
   "%type"                           return PERCENT_TYPE;
   "%union"                          return PERCENT_UNION;
   "%verbose"                        return BISON_DIRECTIVE (VERBOSE);
-  "%yacc"                           RETURN_VALUE (PERCENT_YACC, uniqstr_new (yytext));
+  "%yacc"                           return PERCENT_YACC;
+
+  /* Deprecated since Bison 2.3b (2008-05-27), but the warning is
+     issued only since Bison 3.4. */
+  "%pure"[-_]"parser"               RETURN_VALUE (PERCENT_PURE_PARSER, uniqstr_new (yytext));
 
   /* Deprecated since Bison 3.0 (2013-07-25), but the warning is
      issued only since Bison 3.3. */
@@ -270,21 +295,22 @@ eqopt    ({sp}=)?
   "%name"[-_]"prefix"{eqopt}{sp}    RETURN_VALUE (PERCENT_NAME_PREFIX, uniqstr_new (yytext));
 
   /* Deprecated since Bison 2.7.90, 2012. */
-  "%default"[-_]"prec"              DEPRECATED ("%default-prec");
+  "%default"[-_]"prec"              DEPRECATED_DIRECTIVE ("%default-prec");
   "%error"[-_]"verbose"             RETURN_VALUE (PERCENT_ERROR_VERBOSE, uniqstr_new (yytext));
-  "%expect"[-_]"rr"                 DEPRECATED ("%expect-rr");
+  "%expect"[-_]"rr"                 DEPRECATED_DIRECTIVE ("%expect-rr");
   "%file-prefix"{eqopt}             RETURN_VALUE (PERCENT_FILE_PREFIX, uniqstr_new (yytext));
-  "%fixed"[-_]"output"[-_]"files"   RETURN_VALUE (PERCENT_YACC, uniqstr_new (yytext));
-  "%no"[-_]"default"[-_]"prec"      DEPRECATED ("%no-default-prec");
-  "%no"[-_]"lines"                  DEPRECATED ("%no-lines");
-  "%output"{eqopt}                  DEPRECATED ("%output");
-  "%pure"[-_]"parser"               DEPRECATED ("%pure-parser");
-  "%token"[-_]"table"               DEPRECATED ("%token-table");
+  "%fixed"[-_]"output"[-_]"files"   DEPRECATED_DIRECTIVE ("%output \"y.tab.c\"");
+  "%no"[-_]"default"[-_]"prec"      DEPRECATED_DIRECTIVE ("%no-default-prec");
+  "%no"[-_]"lines"                  DEPRECATED_DIRECTIVE ("%no-lines");
+  "%output"{eqopt}                  DEPRECATED_DIRECTIVE ("%output");
+  "%token"[-_]"table"               DEPRECATED_DIRECTIVE ("%token-table");
 
   "%"{id} {
     complain (loc, complaint, _("invalid directive: %s"), quote (yytext));
+    return GRAM_error;
   }
 
+  ":"                     return COLON;
   "="                     return EQUAL;
   "|"                     return PIPE;
   ";"                     return SEMICOLON;
@@ -303,27 +329,29 @@ eqopt    ({sp}=)?
      accept "1FOO" as "1 FOO".  */
   {int}{id} {
     complain (loc, complaint, _("invalid identifier: %s"), quote (yytext));
+    return GRAM_error;
   }
 
   /* Characters.  */
   "'"         token_start = loc->start; BEGIN SC_ESCAPED_CHARACTER;
 
   /* Strings. */
-  "\""        token_start = loc->start; BEGIN SC_ESCAPED_STRING;
+  "\""        token_start = loc->start; STRING_1GROW ('"'); BEGIN SC_ESCAPED_STRING;
+  "_(\""      token_start = loc->start; STRING_1GROW ('"'); BEGIN SC_ESCAPED_TSTRING;
 
   /* Prologue. */
   "%{"        code_start = loc->start; BEGIN SC_PROLOGUE;
 
   /* Code in between braces.  */
   "{" {
-    STRING_GROW;
+    STRING_GROW ();
     nesting = 0;
     code_start = loc->start;
     BEGIN SC_BRACED_CODE;
   }
 
   /* Semantic predicate. */
-  "%?"[ \f\n\t\v]*"{" {
+  "%?"([ \f\t\v]|{eol})*"{" {
     nesting = 0;
     code_start = loc->start;
     BEGIN SC_PREDICATE;
@@ -352,10 +380,11 @@ eqopt    ({sp}=)?
     BEGIN SC_BRACKETED_ID;
   }
 
-  [^\[%A-Za-z0-9_<>{}\"\'*;|=/, \f\n\t\v]+|. {
+  [^\[%A-Za-z0-9_<>{}""''*;|=/, \f\r\n\t\v]+|. {
     complain (loc, complaint, "%s: %s",
               ngettext ("invalid character", "invalid characters", yyleng),
               quote_mem (yytext, yyleng));
+    return GRAM_error;
   }
 
   <<EOF>> {
@@ -370,9 +399,13 @@ eqopt    ({sp}=)?
   | added value.                                                  |
   `--------------------------------------------------------------*/
 
-<SC_ESCAPED_CHARACTER,SC_ESCAPED_STRING,SC_TAG>
+<SC_ESCAPED_CHARACTER,SC_ESCAPED_STRING,SC_ESCAPED_TSTRING,SC_TAG>
 {
-  \0        complain (loc, complaint, _("invalid null character"));
+  \0         {
+    complain (loc, complaint, _("invalid null character"));
+    STRING_FREE ();
+    return GRAM_error;
+  }
 }
 
 
@@ -398,6 +431,7 @@ eqopt    ({sp}=)?
       }
   }
   ":" {
+    ROLLBACK_CURRENT_TOKEN;
     BEGIN (bracketed_id_str ? SC_RETURN_BRACKETED_ID : INITIAL);
     *loc = id_loc;
     return ID_COLON;
@@ -427,6 +461,7 @@ eqopt    ({sp}=)?
         complain (loc, complaint,
                   _("unexpected identifier in bracketed name: %s"),
                   quote (yytext));
+        return GRAM_error;
       }
     else
       {
@@ -447,14 +482,18 @@ eqopt    ({sp}=)?
           }
       }
     else
-      complain (loc, complaint, _("an identifier expected"));
+      {
+        complain (loc, complaint, _("an identifier expected"));
+        return GRAM_error;
+      }
   }
 
-  [^\].A-Za-z0-9_/ \f\n\t\v]+|. {
+  [^\].A-Za-z0-9_/ \f\r\n\t\v]+|. {
     complain (loc, complaint, "%s: %s",
               ngettext ("invalid character in bracketed name",
                         "invalid characters in bracketed name", yyleng),
               quote_mem (yytext, yyleng));
+    return GRAM_error;
   }
 
   <<EOF>> {
@@ -483,7 +522,7 @@ eqopt    ({sp}=)?
 <SC_YACC_COMMENT>
 {
   "*/"     BEGIN context_state;
-  .|\n     continue;
+  .|{eol}  continue;
   <<EOF>>  unexpected_eof (token_start, "*/"); BEGIN context_state;
 }
 
@@ -494,7 +533,7 @@ eqopt    ({sp}=)?
 
 <SC_COMMENT>
 {
-  "*"{splice}"/"  STRING_GROW; BEGIN context_state;
+  "*"{splice}"/"  STRING_GROW (); BEGIN context_state;
   <<EOF>>         unexpected_eof (token_start, "*/"); BEGIN context_state;
 }
 
@@ -505,8 +544,8 @@ eqopt    ({sp}=)?
 
 <SC_LINE_COMMENT>
 {
-  "\n"           STRING_GROW; BEGIN context_state;
-  {splice}       STRING_GROW;
+  {eol}          STRING_GROW (); BEGIN context_state;
+  {splice}       STRING_GROW ();
   <<EOF>>        BEGIN context_state;
 }
 
@@ -519,16 +558,35 @@ eqopt    ({sp}=)?
 <SC_ESCAPED_STRING>
 {
   "\"" {
-    STRING_FINISH;
+    STRING_1GROW ('"');
+    STRING_FINISH ();
     BEGIN INITIAL;
     loc->start = token_start;
     complain (loc, Wyacc,
               _("POSIX Yacc does not support string literals"));
     RETURN_VALUE (STRING, last_string);
   }
+}
+
+<SC_ESCAPED_TSTRING>
+{
+  "\")" {
+    STRING_1GROW ('"');
+    STRING_FINISH ();
+    BEGIN INITIAL;
+    loc->start = token_start;
+    complain (loc, Wyacc,
+              _("POSIX Yacc does not support string literals"));
+    RETURN_VALUE (TSTRING, last_string);
+  }
+}
+
+<SC_ESCAPED_STRING,SC_ESCAPED_TSTRING>
+{
   <<EOF>>   unexpected_eof (token_start, "\"");
   "\n"      unexpected_newline (token_start, "\"");
 }
+
 
   /*----------------------------------------------------------.
   | Scanning a Bison character literal, decoding its escapes. |
@@ -538,25 +596,30 @@ eqopt    ({sp}=)?
 <SC_ESCAPED_CHARACTER>
 {
   "'" {
-    STRING_FINISH;
+    STRING_FINISH ();
+    BEGIN INITIAL;
     loc->start = token_start;
     val->CHAR = last_string[0];
 
-    /* FIXME: Eventually, make these errors.  */
     if (last_string[0] == '\0')
-    {
-      complain (loc, Wother, _("empty character literal"));
-      /* '\0' seems dangerous even if we are about to complain.  */
-      val->CHAR = '\'';
-    }
+      {
+        complain (loc, complaint, _("empty character literal"));
+        STRING_FREE ();
+        return GRAM_error;
+      }
     else if (last_string[1] != '\0')
-      complain (loc, Wother,
-                _("extra characters in character literal"));
-    STRING_FREE;
-    BEGIN INITIAL;
-    return CHAR;
+      {
+        complain (loc, complaint, _("extra characters in character literal"));
+        STRING_FREE ();
+        return GRAM_error;
+      }
+    else
+      {
+        STRING_FREE ();
+        return CHAR;
+      }
   }
-  "\n"      unexpected_newline (token_start, "'");
+  {eol}     unexpected_newline (token_start, "'");
   <<EOF>>   unexpected_eof (token_start, "'");
 }
 
@@ -572,18 +635,18 @@ eqopt    ({sp}=)?
     --nesting;
     if (nesting < 0)
       {
-        STRING_FINISH;
+        STRING_FINISH ();
         loc->start = token_start;
         val->TAG = uniqstr_new (last_string);
-        STRING_FREE;
+        STRING_FREE ();
         BEGIN INITIAL;
         return TAG;
       }
-    STRING_GROW;
+    STRING_GROW ();
   }
 
-  ([^<>]|->)+ STRING_GROW;
-  "<"+   STRING_GROW; nesting += yyleng;
+  ([^<>]|->)+ STRING_GROW ();
+  "<"+   STRING_GROW (); nesting += yyleng;
 
   <<EOF>>   unexpected_eof (token_start, ">");
 }
@@ -592,48 +655,32 @@ eqopt    ({sp}=)?
   | Decode escaped characters.  |
   `----------------------------*/
 
-<SC_ESCAPED_STRING,SC_ESCAPED_CHARACTER>
+<SC_ESCAPED_CHARACTER,SC_ESCAPED_STRING,SC_ESCAPED_TSTRING>
 {
   \\[0-7]{1,3} {
-    verify (UCHAR_MAX < ULONG_MAX);
-    unsigned long c = strtoul (yytext + 1, NULL, 8);
-    if (!c || UCHAR_MAX < c)
-      complain (loc, complaint, _("invalid number after \\-escape: %s"),
-                yytext+1);
-    else
-      obstack_1grow (&obstack_for_string, c);
+    STRING_GROW_ESCAPE (strtol (yytext + 1, NULL, 8));
   }
 
   \\x[0-9abcdefABCDEF]+ {
-    verify (UCHAR_MAX < ULONG_MAX);
-    unsigned long c = strtoul (yytext + 2, NULL, 16);
-    if (!c || UCHAR_MAX < c)
-      complain (loc, complaint, _("invalid number after \\-escape: %s"),
-                yytext+1);
-    else
-      obstack_1grow (&obstack_for_string, c);
+    STRING_GROW_ESCAPE (strtol (yytext + 2, NULL, 16));
   }
 
-  \\a   obstack_1grow (&obstack_for_string, '\a');
-  \\b   obstack_1grow (&obstack_for_string, '\b');
-  \\f   obstack_1grow (&obstack_for_string, '\f');
-  \\n   obstack_1grow (&obstack_for_string, '\n');
-  \\r   obstack_1grow (&obstack_for_string, '\r');
-  \\t   obstack_1grow (&obstack_for_string, '\t');
-  \\v   obstack_1grow (&obstack_for_string, '\v');
+  \\a   STRING_GROW_ESCAPE ('\a');
+  \\b   STRING_GROW_ESCAPE ('\b');
+  \\f   STRING_GROW_ESCAPE ('\f');
+  \\n   STRING_GROW_ESCAPE ('\n');
+  \\r   STRING_GROW_ESCAPE ('\r');
+  \\t   STRING_GROW_ESCAPE ('\t');
+  \\v   STRING_GROW_ESCAPE ('\v');
 
   /* \\[\"\'?\\] would be shorter, but it confuses xgettext.  */
-  \\("\""|"'"|"?"|"\\")  obstack_1grow (&obstack_for_string, yytext[1]);
+  \\("\""|"'"|"?"|"\\")  STRING_GROW_ESCAPE (yytext[1]);
 
   \\(u|U[0-9abcdefABCDEF]{4})[0-9abcdefABCDEF]{4} {
-    int c = convert_ucn_to_byte (yytext);
-    if (c <= 0)
-      complain (loc, complaint, _("invalid number after \\-escape: %s"),
-                yytext+1);
-    else
-      obstack_1grow (&obstack_for_string, c);
+    STRING_GROW_ESCAPE (convert_ucn_to_byte (yytext));
   }
-  \\(.|\n)      {
+
+  \\(.|{eol})      {
     char const *p = yytext + 1;
     /* Quote only if escaping won't make the character visible.  */
     if (c_isspace ((unsigned char) *p) && c_isprint ((unsigned char) *p))
@@ -642,6 +689,7 @@ eqopt    ({sp}=)?
       p = quotearg_style_mem (escape_quoting_style, p, 1);
     complain (loc, complaint, _("invalid character after \\-escape: %s"),
               p);
+    STRING_1GROW ('?');
   }
 }
 
@@ -651,20 +699,20 @@ eqopt    ({sp}=)?
 
 <SC_CHARACTER,SC_STRING>
 {
-  {splice}|\\{splice}[^\n\[\]]  STRING_GROW;
+  {splice}|\\{splice}[^\n\[\]]  STRING_GROW ();
 }
 
 <SC_CHARACTER>
 {
-  "'"           STRING_GROW; BEGIN context_state;
-  \n            unexpected_newline (token_start, "'");
+  "'"           STRING_GROW (); BEGIN context_state;
+  {eol}         unexpected_newline (token_start, "'");
   <<EOF>>       unexpected_eof (token_start, "'");
 }
 
 <SC_STRING>
 {
-  "\""          STRING_GROW; BEGIN context_state;
-  \n            unexpected_newline (token_start, "\"");
+  "\""          STRING_GROW (); BEGIN context_state;
+  {eol}         unexpected_newline (token_start, "\"");
   <<EOF>>       unexpected_eof (token_start, "\"");
 }
 
@@ -676,25 +724,25 @@ eqopt    ({sp}=)?
 <SC_BRACED_CODE,SC_PROLOGUE,SC_EPILOGUE,SC_PREDICATE>
 {
   "'" {
-    STRING_GROW;
+    STRING_GROW ();
     context_state = YY_START;
     token_start = loc->start;
     BEGIN SC_CHARACTER;
   }
   "\"" {
-    STRING_GROW;
+    STRING_GROW ();
     context_state = YY_START;
     token_start = loc->start;
     BEGIN SC_STRING;
   }
   "/"{splice}"*" {
-    STRING_GROW;
+    STRING_GROW ();
     context_state = YY_START;
     token_start = loc->start;
     BEGIN SC_COMMENT;
   }
   "/"{splice}"/" {
-    STRING_GROW;
+    STRING_GROW ();
     context_state = YY_START;
     BEGIN SC_LINE_COMMENT;
   }
@@ -709,12 +757,12 @@ eqopt    ({sp}=)?
 
 <SC_BRACED_CODE,SC_PREDICATE>
 {
-  "{"|"<"{splice}"%"  STRING_GROW; nesting++;
-  "%"{splice}">"      STRING_GROW; nesting--;
+  "{"|"<"{splice}"%"  STRING_GROW (); nesting++;
+  "%"{splice}">"      STRING_GROW (); nesting--;
 
   /* Tokenize '<<%' correctly (as '<<' '%') rather than incorrectly
      (as '<' '<%').  */
-  "<"{splice}"<"  STRING_GROW;
+  "<"{splice}"<"  STRING_GROW ();
 
   <<EOF>>   unexpected_eof (code_start, "}");
 }
@@ -722,12 +770,12 @@ eqopt    ({sp}=)?
 <SC_BRACED_CODE>
 {
   "}" {
-    obstack_1grow (&obstack_for_string, '}');
+    STRING_1GROW ('}');
 
     --nesting;
     if (nesting < 0)
       {
-        STRING_FINISH;
+        STRING_FINISH ();
         loc->start = code_start;
         BEGIN INITIAL;
         RETURN_VALUE (BRACED_CODE, last_string);
@@ -741,13 +789,13 @@ eqopt    ({sp}=)?
     --nesting;
     if (nesting < 0)
       {
-        STRING_FINISH;
+        STRING_FINISH ();
         loc->start = code_start;
         BEGIN INITIAL;
         RETURN_VALUE (BRACED_PREDICATE, last_string);
       }
     else
-      obstack_1grow (&obstack_for_string, '}');
+      STRING_1GROW ('}');
   }
 }
 
@@ -758,7 +806,7 @@ eqopt    ({sp}=)?
 <SC_PROLOGUE>
 {
   "%}" {
-    STRING_FINISH;
+    STRING_FINISH ();
     loc->start = code_start;
     BEGIN INITIAL;
     RETURN_VALUE (PROLOGUE, last_string);
@@ -776,7 +824,7 @@ eqopt    ({sp}=)?
 <SC_EPILOGUE>
 {
   <<EOF>> {
-    STRING_FINISH;
+    STRING_FINISH ();
     loc->start = code_start;
     BEGIN INITIAL;
     RETURN_VALUE (EPILOGUE, last_string);
@@ -788,64 +836,25 @@ eqopt    ({sp}=)?
   | By default, grow the string obstack with the input.  |
   `-----------------------------------------------------*/
 
-<SC_COMMENT,SC_LINE_COMMENT,SC_BRACED_CODE,SC_PREDICATE,SC_PROLOGUE,SC_EPILOGUE,SC_STRING,SC_CHARACTER,SC_ESCAPED_STRING,SC_ESCAPED_CHARACTER>. |
-  <SC_COMMENT,SC_LINE_COMMENT,SC_BRACED_CODE,SC_PREDICATE,SC_PROLOGUE,SC_EPILOGUE>\n    STRING_GROW;
-
-%%
-
-/* Read bytes from FP into buffer BUF of size SIZE.  Return the
-   number of bytes read.  Remove '\r' from input, treating \r\n
-   and isolated \r as \n.  */
-
-static size_t
-no_cr_read (FILE *fp, char *buf, size_t size)
+<SC_COMMENT,SC_LINE_COMMENT,SC_BRACED_CODE,SC_PREDICATE,SC_PROLOGUE,SC_EPILOGUE,SC_STRING,SC_CHARACTER,SC_ESCAPED_CHARACTER,SC_ESCAPED_STRING,SC_ESCAPED_TSTRING>
 {
-  size_t bytes_read = fread (buf, 1, size, fp);
-  if (bytes_read)
-    {
-      char *w = memchr (buf, '\r', bytes_read);
-      if (w)
-        {
-          char const *r = ++w;
-          char const *lim = buf + bytes_read;
+  /* Accept multibyte characters in one block instead of byte after
+     byte, so that add_column_width and mbsnwidth can compute correct
+     screen width.
 
-          for (;;)
-            {
-              /* Found an '\r'.  Treat it like '\n', but ignore any
-                 '\n' that immediately follows.  */
-              w[-1] = '\n';
-              if (r == lim)
-                {
-                  int ch = getc (fp);
-                  if (ch != '\n' && ungetc (ch, fp) != ch)
-                    break;
-                }
-              else if (*r == '\n')
-                r++;
-
-              /* Copy until the next '\r'.  */
-              do
-                {
-                  if (r == lim)
-                    return w - buf;
-                }
-              while ((*w++ = *r++) != '\r');
-            }
-
-          return w - buf;
-        }
-    }
-
-  return bytes_read;
+     Add a fallthrough "|." so that non UTF-8 input is still accepted
+     and does not jam the scanner.  */
+  {mbchar}|.   STRING_GROW ();
 }
 
+%%
 
 
 /*------------------------------------------------------.
 | Scan NUMBER for a base-BASE integer at location LOC.  |
 `------------------------------------------------------*/
 
-static unsigned long
+static int
 scan_integer (char const *number, int base, location loc)
 {
   verify (INT_MAX < ULONG_MAX);
@@ -853,9 +862,10 @@ scan_integer (char const *number, int base, location loc)
     complain (&loc, Wyacc,
               _("POSIX Yacc does not support hexadecimal literals"));
 
-  unsigned long num = strtoul (number, NULL, base);
+  errno = 0;
+  long num = strtol (number, NULL, base);
 
-  if (INT_MAX < num)
+  if (! (0 <= num && num <= INT_MAX && errno == 0))
     {
       complain (&loc, complaint, _("integer out of range: %s"),
                 quote (number));
@@ -876,7 +886,7 @@ static int
 convert_ucn_to_byte (char const *ucn)
 {
   verify (UCHAR_MAX <= INT_MAX);
-  unsigned long code = strtoul (ucn + 2, NULL, 16);
+  long code = strtol (ucn + 2, NULL, 16);
 
   /* FIXME: Currently we assume Unicode-compatible unibyte characters
      on ASCII hosts (i.e., Latin-1 on hosts with 8-bit bytes).  On
@@ -884,7 +894,7 @@ convert_ucn_to_byte (char const *ucn)
      These limitations should be removed once we add support for
      multibyte characters.  */
 
-  if (UCHAR_MAX < code)
+  if (! (0 <= code && code <= UCHAR_MAX))
     return -1;
 
 #if ! ('$' == 0x24 && '@' == 0x40 && '`' == 0x60 && '~' == 0x7e)
@@ -931,8 +941,9 @@ static void
 handle_syncline (char *args, location loc)
 {
   char *file;
-  unsigned long lineno = strtoul (args, &file, 10);
-  if (INT_MAX <= lineno)
+  errno = 0;
+  long lineno = strtol (args, &file, 10);
+  if (! (0 <= lineno && lineno <= INT_MAX && errno == 0))
     {
       complain (&loc, Wother, _("line number overflow"));
       lineno = INT_MAX;
@@ -944,7 +955,7 @@ handle_syncline (char *args, location loc)
       *strchr (file + 1, '"') = '\0';
       current_file = uniqstr_new (file + 1);
     }
-  boundary_set (&scanner_cursor, current_file, lineno, 1);
+  boundary_set (&scanner_cursor, current_file, lineno, 1, 1);
 }
 
 
@@ -965,6 +976,7 @@ unexpected_end (boundary start, char const *msgid, char const *token_end)
   /* Adjust scanner cursor so that any later message does not count
      the characters about to be inserted.  */
   scanner_cursor.column -= i;
+  scanner_cursor.byte -= i;
 
   while (i != 0)
     unput (token_end[--i]);
@@ -1001,25 +1013,28 @@ unexpected_newline (boundary start, char const *token_end)
 }
 
 
-/*-------------------------.
-| Initialize the scanner.  |
-`-------------------------*/
-
 void
-gram_scanner_initialize (void)
+gram_scanner_open (const char *gram)
 {
+  gram__flex_debug = trace_flag & trace_scan;
+  gram_debug = trace_flag & trace_parse;
   obstack_init (&obstack_for_string);
+  current_file = gram;
+  gram_in = xfopen (gram, "r");
 }
 
 
-/*-----------------------------------------------.
-| Free all the memory allocated to the scanner.  |
-`-----------------------------------------------*/
+void
+gram_scanner_close (void)
+{
+  xfclose (gram_in);
+  /* Reclaim Flex's buffers.  */
+  yylex_destroy ();
+}
+
 
 void
 gram_scanner_free (void)
 {
   obstack_free (&obstack_for_string, 0);
-  /* Reclaim Flex's buffers.  */
-  yylex_destroy ();
 }

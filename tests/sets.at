@@ -1,6 +1,6 @@
 # Exercising Bison Grammar Sets.                      -*- Autotest -*-
 
-# Copyright (C) 2001-2002, 2005, 2007, 2009-2015, 2018-2019 Free
+# Copyright (C) 2001-2002, 2005, 2007, 2009-2015, 2018-2020 Free
 # Software Foundation, Inc.
 
 # This program is free software: you can redistribute it and/or modify
@@ -15,45 +15,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-
-# AT_EXTRACT_SETS(INPUT, OUTPUT)
-# ------------------------------
-# Extract the information about the grammar sets from a bison
-# trace output (INPUT), and save it in OUTPUT.
-# And remember, there is no alternation in portable sed.
-m4_define([AT_EXTRACT_SETS],
-[AT_DATA([extract.sed],
-[[#n
-/^NULLABLE$/ {
-   :null
-   p
-   n
-   /^ *$/ !b null
-}
-/^FIRSTS$/ {
-   :firsts
-   p
-   n
-   /^ *$/ !b firsts
-}
-/^FDERIVES$/ {
-   :fderiv
-   p
-   n
-   /^ *$/ !b fderiv
-}
-/^DERIVES$/ {
-   :deriv
-   p
-   n
-   /^ *$/ !b deriv
-}
-]])
-AT_CHECK([sed -f extract.sed $1], 0, [stdout])
-AT_CHECK([mv stdout $2])
-])
-
 
 
 AT_BANNER([[Grammar Sets (Firsts etc.).]])
@@ -79,8 +40,7 @@ e: 'e' | /* Nothing */;
 ]])
 
 AT_BISON_CHECK([[--trace=sets input.y]], [], [], [stderr])
-AT_EXTRACT_SETS([stderr], [sets])
-AT_CHECK([[cat sets]], [],
+AT_SETS_CHECK([stderr], [[DERIVES], [NULLABLE], [FIRSTS], [FDERIVES]],
 [[DERIVES
   $accept derives
       0  e $end
@@ -209,8 +169,7 @@ exp:
 ]])
 
 AT_BISON_CHECK([[--trace=sets input.y]], [], [], [stderr])
-AT_EXTRACT_SETS([stderr], [sets])
-AT_CHECK([[cat sets]], [],
+AT_SETS_CHECK([stderr], [[DERIVES], [NULLABLE], [FIRSTS], [FDERIVES]],
 [[DERIVES
   $accept derives
       0  exp $end
@@ -304,6 +263,50 @@ AT_CLEANUP
 
 
 ## ----------------- ##
+## Build relations.  ##
+## ----------------- ##
+
+AT_SETUP([Build relations])
+
+# The "includes" relation [DeRemer 1982] is between gotos, so of
+# course, for a given goto, there cannot be more that ngotos (number
+# of gotos) images.  But we manipulate the set of images of a goto as
+# a list, without checking that an image was not already introduced.
+# So we can "register" way more images than ngotos, leading to a crash
+# (heap buffer overflow).
+#
+# http://lists.gnu.org/archive/html/bug-bison/2019-03/msg00007.html
+
+AT_DATA([input.y],
+[[%%
+expr: term | term | term | term | term | term
+term: 'n'
+]])
+
+AT_BISON_CHECK([[-fcaret input.y]], [], [],
+[[input.y: warning: 5 reduce/reduce conflicts [-Wconflicts-rr]
+input.y: warning: rerun with option '-Wcounterexamples' to generate conflict counterexamples [-Wother]
+input.y:2.14-17: warning: rule useless in parser due to conflicts [-Wother]
+    2 | expr: term | term | term | term | term | term
+      |              ^~~~
+input.y:2.21-24: warning: rule useless in parser due to conflicts [-Wother]
+    2 | expr: term | term | term | term | term | term
+      |                     ^~~~
+input.y:2.28-31: warning: rule useless in parser due to conflicts [-Wother]
+    2 | expr: term | term | term | term | term | term
+      |                            ^~~~
+input.y:2.35-38: warning: rule useless in parser due to conflicts [-Wother]
+    2 | expr: term | term | term | term | term | term
+      |                                   ^~~~
+input.y:2.42-45: warning: rule useless in parser due to conflicts [-Wother]
+    2 | expr: term | term | term | term | term | term
+      |                                          ^~~~
+]])
+
+AT_CLEANUP
+
+
+## ----------------- ##
 ## Reduced Grammar.  ##
 ## ----------------- ##
 
@@ -315,34 +318,52 @@ AT_DATA([input.y],
 [[%%
 expr: expr "+" term | term
 term: term "*" fact | fact
+useless: "useless"
 fact: "num"
 ]])
 
 AT_BISON_CHECK([[--trace=grammar -o input.c input.y]], [], [],
-[[Reduced Grammar
+[[input.y: warning: 1 nonterminal useless in grammar [-Wother]
+input.y: warning: 1 rule useless in grammar [-Wother]
+input.y:4.1-7: warning: nonterminal useless in grammar: useless [-Wother]
+Reduced Grammar
 
-ntokens = 6, nvars = 4, nsyms = 10, nrules = 6, nritems = 17
+ntokens = 7, nnterms = 4, nsyms = 11, nrules = 6, nritems = 17
 
-Variables
----------
+Tokens
+------
 
 Value  Sprec  Sassoc  Tag
-    6      0       0  $accept
-    7      0       0  expr
-    8      0       0  term
-    9      0       0  fact
+    0      0       0  $end
+    1      0       0  error
+    2      0       0  $undefined
+    3      0       0  "+"
+    4      0       0  "*"
+    5      0       0  "useless"
+    6      0       0  "num"
+
+
+Nonterminals
+------------
+
+Value  Tag
+    7  $accept
+    8  expr
+    9  term
+   10  fact
 
 
 Rules
 -----
 
-Num (Num, Prec, Assoc, Useful, UselessChain, Ritem Range) Lhs -> Rhs (Ritem range)
-  0 (  0,  0,  0,  t,  f,  0- 1)    6 ->   7   0
-  1 (  1,  0,  0,  t,  f,  3- 5)    7 ->   7   3   8
-  2 (  2,  0,  0,  t,  t,  7- 7)    7 ->   8
-  3 (  3,  0,  0,  t,  f,  9-11)    8 ->   8   4   9
-  4 (  4,  0,  0,  t,  t, 13-13)    8 ->   9
-  5 (  5,  0,  0,  t,  t, 15-15)    9 ->   5
+Num (Prec, Assoc, Useful, UselessChain) Lhs -> (Ritem Range) Rhs
+  0 ( 0,  0,  t,  f)    7 -> ( 0- 1)   8   0
+  1 ( 0,  0,  t,  f)    8 -> ( 3- 5)   8   3   9
+  2 ( 0,  0,  t,  t)    8 -> ( 7- 7)   9
+  3 ( 0,  0,  t,  f)    9 -> ( 9-11)   9   4  10
+  4 ( 0,  0,  t,  t)    9 -> (13-13)  10
+  5 ( 0,  0,  t,  t)   10 -> (17-17)   6
+  6 ( 0,  0,  f,  t)   11 -> (15-15)   5
 
 
 Rules interpreted
@@ -354,9 +375,96 @@ Rules interpreted
 3      term: term "*" fact
 4      term: fact
 5      fact: "num"
+6      useless: "useless"
 
 
-reduced input.y defines 6 terminals, 4 nonterminals, and 6 productions.
+reduced input.y defines 7 terminals, 4 nonterminals, and 6 productions.
+]])
+
+AT_CLEANUP
+
+
+## ------------------------------------- ##
+## Reduced Grammar with prec and assoc.  ##
+## ------------------------------------- ##
+
+# Check information about the grammar, once reduced.
+
+AT_SETUP([Reduced Grammar with prec and assoc])
+
+AT_DATA([input.y],
+[[%nonassoc '<' '>'
+%left '+' '-'
+%right '^' '='
+%%
+exp:
+   exp '<' exp
+ | exp '>' exp
+ | exp '+' exp
+ | exp '-' exp
+ | exp '^' exp
+ | exp '=' exp
+ | "exp"
+ ;
+]])
+
+AT_BISON_CHECK([[--trace=grammar -o input.c input.y]], [], [],
+[[Reduced Grammar
+
+ntokens = 10, nnterms = 2, nsyms = 12, nrules = 8, nritems = 29
+
+Tokens
+------
+
+Value  Sprec  Sassoc  Tag
+    0      0       0  $end
+    1      0       0  error
+    2      0       0  $undefined
+    3      1       3  '<'
+    4      1       3  '>'
+    5      2       2  '+'
+    6      2       2  '-'
+    7      3       1  '^'
+    8      3       1  '='
+    9      0       0  "exp"
+
+
+Nonterminals
+------------
+
+Value  Tag
+   10  $accept
+   11  exp
+
+
+Rules
+-----
+
+Num (Prec, Assoc, Useful, UselessChain) Lhs -> (Ritem Range) Rhs
+  0 ( 0,  0,  t,  f)   10 -> ( 0- 1)  11   0
+  1 ( 1,  3,  t,  f)   11 -> ( 3- 5)  11   3  11
+  2 ( 1,  3,  t,  f)   11 -> ( 7- 9)  11   4  11
+  3 ( 2,  2,  t,  f)   11 -> (11-13)  11   5  11
+  4 ( 2,  2,  t,  f)   11 -> (15-17)  11   6  11
+  5 ( 3,  1,  t,  f)   11 -> (19-21)  11   7  11
+  6 ( 3,  1,  t,  f)   11 -> (23-25)  11   8  11
+  7 ( 0,  0,  t,  t)   11 -> (27-27)   9
+
+
+Rules interpreted
+-----------------
+
+0      $accept: exp $end
+1      exp: exp '<' exp
+2      exp: exp '>' exp
+3      exp: exp '+' exp
+4      exp: exp '-' exp
+5      exp: exp '^' exp
+6      exp: exp '=' exp
+7      exp: "exp"
+
+
+reduced input.y defines 10 terminals, 2 nonterminals, and 8 productions.
 ]])
 
 AT_CLEANUP

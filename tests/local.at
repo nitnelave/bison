@@ -2,7 +2,7 @@
 
 # Macros for the GNU Bison Test suite.
 
-# Copyright (C) 2003-2015, 2018-2019 Free Software Foundation, Inc.
+# Copyright (C) 2003-2015, 2018-2020 Free Software Foundation, Inc.
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -29,6 +29,19 @@ m4_define([m4_null_if],
          [],  [$2],
          [$3])])
 
+
+# m4_rpatsubst(STRING, PATTERN, REPLACEMENT)
+# ------------------------------------------
+# As long as PATTERN matches STRING, replace occurrences of PATTERN by
+# REPLACEMENT.
+#
+# Contrary to m4_bpatsubst, matches PATTERN from previous replacements.
+m4_define([m4_rpatsubst],
+[m4_if(m4_bregexp([$1], [$2]),
+       [-1], [$1],
+       [m4_rpatsubst(m4_quote(m4_bpatsubst([$1], [$2], [$3])), [$2], [$3])])])
+
+
 # AT_SETUP_STRIP(TITLE)
 # ---------------------
 # Abbreviate the TITLE to be passed to AT_SETUP.  Remove new-lines
@@ -46,19 +59,73 @@ m4_define([AT_SETUP_STRIP],
 ])
 
 
+# AT_DATA_NO_FINAL_EOL(FILE, CONTENT)
+# -----------------------------------
+# Same as AT_DATA, except that CONTENT has no the final end of line.
+#
+# FIXME: AT_DATA or some variant of AT_DATA may eventually permit
+# the final newline to be omitted.  See the threads starting at
+# <http://lists.gnu.org/archive/html/bison-patches/2009-07/msg00019.html>.
+m4_define([AT_DATA_NO_FINAL_EOL],
+[AT_DATA([$1], [$2
+])
+AT_REQUIRE([
+set x `LC_ALL=C ls -l '$1'` &&
+  size=$][6 &&
+  { test $size -eq 0 || dd obs=1 seek=`expr $size - 1` if=/dev/null of='$1'; }],
+  [], [ignore], [ignore])
+])
+
+
+
 ## ------------- ##
 ## Basic tests.  ##
 ## ------------- ##
+
+
+# AT_DIFF_U_CHECK(DIFF-ARGS, EXPECTED-DIFF)
+# -----------------------------------------
+# If diff -u works as we expect, use it, with headers stripped.
+m4_define([AT_DIFF_U_CHECK],
+[if $DIFF_U_WORKS; then
+  AT_CHECK([diff -u $1 | sed -n '/^@@/,$p' | sed 's/^ $//'], [0], [$2])
+fi
+])
+
+
+# AT_PERL_CHECK(PERL-ARGS, ...)
+# -----------------------------
+# If Perl is available, run this test.
+m4_define([AT_PERL_CHECK],
+[if test x"$PERL" != x; then
+  AT_CHECK(["$PERL" $1], [$2], [$3], [$4])
+fi
+])
+
+
+# AT_REQUIRE(CMD, ...)
+# --------------------
+# Same as AT_CHECK(...) but skip this test if we failed.
+m4_define([AT_REQUIRE],
+[AT_CHECK([$1 || exit 77], [$2], [$3], [$4])])
+
+
+# AT_PERL_REQUIRE(PERL-ARGS, ...)
+# -------------------------------
+# Run this Perl program, or skip the test if Perl is not available.
+m4_define([AT_PERL_REQUIRE],
+[AT_REQUIRE(["$PERL" $1], [$2], [$3], [$4])])
+
 
 # AT_MATCHES_CHECK(FILE, PERL-REGEXP, COUNT)
 # ------------------------------------------
 # Expect COUNT matches of the PERL-REGEXP in FILE.  The file is
 # taken in "slurp" mode, i.e., one can match end-of-lines.
 m4_define([AT_MATCHES_CHECK],
-[AT_CHECK([$PERL -0777 -ne '
-my $count = 0;
-s{$2}{ ++$count; "" }gem;
-printf "$count\n";' $1], [0], [$3
+[AT_PERL_CHECK([-0777 -ne '
+    my $count = 0;
+    s{$2}{ ++$count; "" }gem;
+    printf "$count\n";' $1], [0], [$3
 ])])
 
 
@@ -137,14 +204,24 @@ m4_define([AT_BISON_OPTION_PUSHDEFS],
 # inside macros, because issuing '[$1]' is not possible in M4 :(.
 # This sucks hard, GNU M4 should really provide M5-like $$1.
 m4_define([_AT_BISON_OPTION_PUSHDEFS],
-[m4_if([$1$2], $[1]$[2], [],
+[m4_pushdef([AT_BISON_OPTIONS], [$3])
+
+m4_if([$1$2], $[1]$[2], [],
        [m4_fatal([$0: invalid arguments: $@])])dnl
 m4_pushdef([AT_AUTOMOVE_IF],
 [m4_bmatch([$3], [%define api\.value\.automove], [$1], [$2])])
 m4_pushdef([AT_DEFINES_IF],
 [m4_bmatch([$3], [%defines], [$1], [$2])])
 m4_pushdef([AT_DEBUG_IF],
-[m4_bmatch([$3], [%debug\|%define parse.trace], [$1], [$2])])
+           [m4_bmatch([$3], [%debug\|%define parse.trace], [$1], [$2])])
+m4_pushdef([AT_ERROR_CUSTOM_IF],
+           [m4_bmatch([$3], [%define parse\.error custom], [$1], [$2])])
+m4_pushdef([AT_ERROR_DETAILED_IF],
+           [m4_bmatch([$3], [%define parse\.error detailed], [$1], [$2])])
+m4_pushdef([AT_ERROR_VERBOSE_IF],
+           [m4_bmatch([$3], [%define parse\.error verbose], [$1], [$2])])
+m4_pushdef([AT_ERROR_SIMPLE_IF],
+           [AT_ERROR_CUSTOM_IF([$2], [AT_ERROR_DETAILED_IF([$2], [AT_ERROR_VERBOSE_IF([$2], [$1])], [$1])], [$1])])
 m4_pushdef([AT_CXX_IF],
 [m4_bmatch([$3], [%language "[Cc]\+\+"\|%skeleton "[a-z0-9]+\.cc"], [$1], [$2])])
 m4_pushdef([AT_D_IF],
@@ -157,6 +234,8 @@ m4_pushdef([AT_LANG],
             [AT_CXX_IF([c++],
                        [AT_D_IF([d],
                                 [c])])])])
+m4_pushdef([AT_C_IF],
+[m4_if(AT_LANG, [c], [$1], [$2])])
 m4_pushdef([AT_GLR_IF],
 [m4_bmatch([$3], [%glr-parser\|%skeleton "glr\..*"], [$1], [$2])])
 m4_pushdef([AT_LALR1_CC_IF],
@@ -166,6 +245,8 @@ m4_pushdef([AT_GLR_CC_IF],
 # Using yacc.c?
 m4_pushdef([AT_YACC_IF],
 [m4_bmatch([$3], [%language\|%glr-parser\|%skeleton], [$2], [$1])])
+m4_pushdef([AT_LAC_IF],
+[m4_bmatch([$3], [%define parse.lac full], [$1], [$2])])
 m4_pushdef([AT_LEXPARAM_IF],
 [m4_bmatch([$3], [%lex-param], [$1], [$2])])
 m4_pushdef([AT_LOCATION_IF],
@@ -177,12 +258,22 @@ m4_pushdef([AT_LOCATION_TYPE_SPAN_IF],
 [m4_bmatch([$3], [%define \(api\.location\.type\|location_type\) \{Span\}], [$1], [$2])])
 m4_pushdef([AT_PARAM_IF],
 [m4_bmatch([$3], [%parse-param], [$1], [$2])])
+
 # Comma-terminated list of formals parse-parameters.
 # E.g., %parse-param { int x } %parse-param {int y} -> "int x, int y, ".
-# FIXME: Support grouped parse-param.
-m4_pushdef([AT_PARSE_PARAMS])
-m4_bpatsubst([$3], [%parse-param { *\([^{}]*[^{} ]\) *}],
-             [m4_append([AT_PARSE_PARAMS], [\1, ])])
+m4_bpatsubst([$3], [%parse-param { *\([^{}]*[^{} ]\) *}{ *\([^{}]*[^{} ]\) *}{ *\([^{}]*[^{} ]\) *}],
+             [m4_append([AT_PARSE_PARAMS], [\1, \2, \3], [, ])])
+m4_bpatsubst([$3], [%parse-param { *\([^{}]*[^{} ]\) *}{ *\([^{}]*[^{} ]\) *}\([^{].*\)?$],
+             [m4_append([AT_PARSE_PARAMS], [\1, \2], [, ])])
+m4_rpatsubst([$3], [%parse-param { *\([^{}]*[^{} ]\) *}\([^{}].*\)?$],
+             [m4_append([AT_PARSE_PARAMS], [\1], [, ])\2])
+m4_ifndef([AT_PARSE_PARAMS],
+          [m4_define([AT_PARSE_PARAMS])])
+
+m4_pushdef([AT_PARSER_CLASS],
+[m4_bmatch([$3], [%define  *api\.parser\.class {\([^\}]*\)}],
+           [m4_bregexp([$3], [%define  *api\.parser\.class {\([^\}]*\)}], [\1])],
+           [AT_API_PREFIX[]Parser])])
 
 m4_pushdef([AT_PURE_IF],
 [m4_bmatch([$3], [%define  *api\.pure\|%pure-parser],
@@ -196,7 +287,7 @@ m4_pushdef([AT_NAME_PREFIX],
    [m4_bregexp([$3],
      [\(%define api\.prefix\|%name-prefix\) [\{\"]\([^\"\}]*\)[\"\}]],
      [\2])],
-   [yy])])
+   [AT_JAVA_IF([YY], [yy])])])
 # AT_NAMESPACE: also consider api.prefix.  FIXME: Stop that confusion.
 m4_pushdef([AT_NAMESPACE],
 [m4_bmatch([$3], [\(%define api\.\(namespace\|prefix\)\|%name-prefix\) .*],
@@ -209,12 +300,14 @@ m4_pushdef([AT_TOKEN_CTOR_IF],
 m4_pushdef([AT_TOKEN_PREFIX],
 [m4_bmatch([$3], [%define api\.token\.prefix {.*}],
            [m4_bregexp([$3], [%define api\.token\.prefix {\(.*\)}], [\1])])])
+m4_pushdef([AT_TOKEN_RAW_IF],
+[m4_bmatch([$3], [%define api\.token\.raw], [$1], [$2])])
 m4_pushdef([AT_VARIANT_IF],
 [m4_bmatch([$3], [%define api\.value\.type variant], [$1], [$2])])
 m4_pushdef([AT_API_prefix],
 [m4_bmatch([$3], [%define api\.prefix {.*}],
            [m4_bregexp([$3], [%define api\.prefix {\([^\}]*\)}], [\1])],
-           [yy])])
+           [AT_JAVA_IF([YY], [yy])])])
 m4_pushdef([AT_API_PREFIX],
 [m4_toupper(AT_API_prefix)])
 # yyerror receives the location if %location, and if the parser is pure. For
@@ -288,13 +381,12 @@ AT_TOKEN_CTOR_IF(
  m4_pushdef([AT_YYLEX_PRE_ARGS],    [])
 ])])
 
-# Handle the different types of location components.
 
-AT_CXX_IF(
-  [AT_LOCATION_TYPE_SPAN_IF(
+# Handle the different types of location components.
+AT_LOCATION_TYPE_SPAN_IF(
     [AT_LOC_PUSHDEF([first.l], [first.c], [last.l], [last.c])],
-    [AT_LOC_PUSHDEF([begin.line], [begin.column], [end.line], [end.column])])],
-  [AT_LOC_PUSHDEF([first_line], [first_column], [last_line], [last_column])])
+    [AT_CXX_IF([AT_LOC_PUSHDEF([begin.line], [begin.column], [end.line], [end.column])],
+               [AT_LOC_PUSHDEF([first_line], [first_column], [last_line], [last_column])])])
 
 
 AT_GLR_IF([AT_KEYWORDS([glr])])
@@ -305,7 +397,9 @@ AT_GLR_IF([AT_KEYWORDS([glr])])
 # -----------------------
 m4_define([AT_BISON_OPTION_POPDEFS],
 [m4_divert_text([KILL],
-[m4_popdef([AT_YYLEX_PRE_ARGS])
+[m4_popdef([AT_BISON_OPTIONS])
+
+m4_popdef([AT_YYLEX_PRE_ARGS])
 m4_popdef([AT_YYLEX_PRE_FORMALS])
 m4_popdef([AT_USE_LEX_ARGS])
 m4_popdef([AT_YYLEX_ARGS])
@@ -320,26 +414,35 @@ m4_popdef([AT_YYERROR_ARG_LOC_IF])
 m4_popdef([AT_API_PREFIX])
 m4_popdef([AT_API_prefix])
 m4_popdef([AT_VARIANT_IF])
+m4_popdef([AT_TOKEN_RAW_IF])
 m4_popdef([AT_TOKEN_PREFIX])
 m4_popdef([AT_TOKEN_CTOR_IF])
 m4_popdef([AT_NAMESPACE])
 m4_popdef([AT_NAME_PREFIX])
 m4_popdef([AT_LOCATION_TYPE_SPAN_IF])
 m4_popdef([AT_LOCATION_IF])
-m4_popdef([AT_PARSE_PARAMS])
+m4_undefine([AT_PARSE_PARAMS])
 m4_popdef([AT_PUSH_IF])
 m4_popdef([AT_PURE_IF])
+m4_popdef([AT_PARSER_CLASS])
 m4_popdef([AT_PARAM_IF])
 m4_popdef([AT_LEXPARAM_IF])
+m4_popdef([AT_LAC_IF])
 m4_popdef([AT_YACC_IF])
 m4_popdef([AT_GLR_IF])
 m4_popdef([AT_CXX_IF])
+m4_popdef([AT_C_IF])
 m4_popdef([AT_LANG])
 m4_popdef([AT_JAVA_IF])
 m4_popdef([AT_GLR_CC_IF])
 m4_popdef([AT_LALR1_CC_IF])
-m4_popdef([AT_DEFINES_IF])
+m4_popdef([AT_ERROR_SIMPLE_IF])
+m4_popdef([AT_ERROR_VERBOSE_IF])
+m4_popdef([AT_ERROR_DETAILED_IF])
+m4_popdef([AT_ERROR_CUSTOM_IF])
 m4_popdef([AT_DEBUG_IF])
+m4_popdef([AT_DEFINES_IF])
+m4_popdef([AT_AUTOMOVE_IF])
 AT_LOC_POPDEF])dnl
 ])# AT_BISON_OPTION_POPDEFS
 
@@ -348,6 +451,18 @@ AT_LOC_POPDEF])dnl
 ## -------------------------- ##
 ## Generating Grammar Files.  ##
 ## -------------------------- ##
+
+# AT_LANG_CASE(LANG1, IF-LANG1, LANG2, IF-LANG2, ..., DEFAULT)
+# ------------------------------------------------------------
+m4_define([AT_LANG_CASE],
+[m4_case(AT_LANG, $@)])
+
+
+# AT_LANG_MATCH(LANG1, IF-LANG1, LANG2, IF-LANG2, ..., DEFAULT)
+# ------------------------------------------------------------
+m4_define([AT_LANG_MATCH],
+[m4_bmatch(AT_LANG, $@)])
+
 
 # _AT_LANG_DISPATCH(LANG, MACRO, ARGS)
 # ------------------------------------
@@ -373,7 +488,7 @@ m4_define([AT_LANG_DISPATCH],
 # The prologue that should be included in any source code that is
 # meant to be compiled.  Keep atlocal.in sync (BISON_CXX_WORKS).
 m4_define([AT_DATA_SOURCE_PROLOGUE],
-[[/* Load config.h, and adjust to the compiler.
+[[/* Adjust to the compiler.
   We used to do it here, but each time we add a new line,
   we have to adjust all the line numbers in error messages.
   It's simpler to use a constant include to a varying file.  */
@@ -382,17 +497,17 @@ m4_define([AT_DATA_SOURCE_PROLOGUE],
 
 # AT_DATA_GRAMMAR_PROLOGUE
 # ------------------------
-# The prologue that should be included in any grammar which parser is
+# The prologue that should be included in any grammar whose parser is
 # meant to be compiled.
 m4_define([AT_DATA_GRAMMAR_PROLOGUE],
-[[%code top {
+[[%code top { /* -*- ]AT_LANG[ -*- */
 ]AT_DATA_SOURCE_PROLOGUE[]dnl
 [}
 ]])
 
 # AT_DATA_SOURCE(NAME, CONTENT)
 # -----------------------------
-# Generate the file NAME, which CONTENT is preceded by
+# Generate the file NAME, whose CONTENT is preceded by
 # AT_DATA_SOURCE_PROLOGUE.
 m4_define([AT_DATA_SOURCE],
 [AT_DATA([$1],
@@ -403,7 +518,7 @@ $2])
 
 # AT_DATA_GRAMMAR(NAME, CONTENT)
 # ------------------------------
-# Generate the file NAME, which CONTENT is preceded by
+# Generate the file NAME, whose CONTENT is preceded by
 # AT_DATA_GRAMMAR_PROLOGUE.
 m4_define([AT_DATA_GRAMMAR], [AT_LANG_DISPATCH([$0], $@)])
 
@@ -414,7 +529,7 @@ m4_define([AT_DATA_GRAMMAR], [AT_LANG_DISPATCH([$0], $@)])
 # AT_YYLEX_DEFINE([INPUT], [ACTION])
 # ----------------------------------
 # INPUT can be empty, or in double quotes, or a list (in braces).
-# ACTION may compute yylval for instance, using "res" as token type,
+# ACTION may compute yylval for instance, using "res" as token kind,
 # and "toknum" as the number of calls to yylex (starting at 0).
 m4_define([AT_YYLEX_PROTOTYPE],
 [AT_YYLEX_RETURN AT_NAME_PREFIX[]lex (]AT_YYLEX_FORMALS[)[]dnl
@@ -466,7 +581,7 @@ $2])
 ])
 
 m4_define([AT_YYERROR_FORMALS(c)],
-[AT_YYERROR_ARG_LOC_IF([AT_YYLTYPE const * const llocp, ])AT_PARSE_PARAMS[const char *msg]])
+[AT_YYERROR_ARG_LOC_IF([AT_YYLTYPE const * const llocp, ])AT_PARAM_IF([AT_PARSE_PARAMS, ])[const char *msg]])
 
 m4_define([AT_YYERROR_PROTOTYPE(c)],
 [[void ]AT_NAME_PREFIX[error (]AT_YYERROR_FORMALS[)]])
@@ -475,7 +590,7 @@ m4_define([AT_YYERROR_DECLARE_EXTERN(c)],
 [AT_YYERROR_PROTOTYPE;])
 
 m4_define([AT_YYERROR_DECLARE(c)],
-[#include <stdio.h>
+[[#include <stdio.h>
 ]AT_LOCATION_IF([[
 #if defined ]AT_YYLTYPE[_IS_TRIVIAL && ]AT_YYLTYPE[_IS_TRIVIAL
 static int location_print (FILE *yyo, ]AT_YYLTYPE[ const * const yylocp);
@@ -484,12 +599,13 @@ static int location_print (FILE *yyo, ]AT_YYLTYPE[ const * const yylocp);
 # endif
 #endif
 ]])[
-static AT_YYERROR_DECLARE_EXTERN])
+static ]AT_YYERROR_DECLARE_EXTERN])
 
 
+# "%define parse.error custom" uses a different format, easy to check.
+# The "verbose" one can be computed from it (see _AT_CHECK_CALC_ERROR).
 m4_define([AT_YYERROR_DEFINE(c)],
-[[
-]AT_LOCATION_IF([[
+[AT_LOCATION_IF([[
 # if defined ]AT_YYLTYPE[_IS_TRIVIAL && ]AT_YYLTYPE[_IS_TRIVIAL
 /* Print *YYLOCP on YYO. */
 __attribute__((__unused__))
@@ -519,17 +635,57 @@ location_print (FILE *yyo, ]AT_YYLTYPE[ const * const yylocp)
 }
 #endif
 ]])[
+
+]AT_ERROR_CUSTOM_IF([[
+int
+yyreport_syntax_error (const yypcontext_t *ctx]AT_PARAM_IF([, AT_PARSE_PARAMS])[)
+{
+  int res = 0;]AT_PARAM_IF([m4_bpatsubst(m4_defn([AT_PARSE_PARAMS]),
+              [[^,]+[^A-Za-z_0-9]\([A-Za-z_][A-Za-z_0-9]*\),* *], [
+  YYUSE (\1);])])[]m4_bmatch(m4_defn([AT_PARSE_PARAMS]), [nerrs],[[
+  ++global_nerrs;
+  ++*nerrs;]])[]AT_LOCATION_IF([[
+  LOCATION_PRINT (stderr, *yypcontext_location (ctx));
+  fprintf (stderr, ": ");]])[
+  fprintf (stderr, "syntax error");
+  {
+    yysymbol_kind_t la = yypcontext_token (ctx);
+    if (la != YYSYMBOL_YYEMPTY)
+      fprintf (stderr, " on token [%s]", yysymbol_name (la));
+  }
+  {
+    enum { TOKENMAX = 10 };
+    yysymbol_kind_t expected[TOKENMAX];
+    int n = yypcontext_expected_tokens (ctx, expected, TOKENMAX);
+    /* Forward errors to yyparse.  */
+    if (n <= 0)
+      res = n;
+    else
+      {
+        fprintf (stderr, " (expected:");
+        for (int i = 0; i < n; ++i)
+          fprintf (stderr, " [%s]", yysymbol_name (expected[i]));
+        fprintf (stderr, ")");
+      }
+  }
+  fprintf (stderr, "\n");
+  return res;
+}
+]])[
+
 /* A C error reporting function.  */
 static
 ]AT_YYERROR_PROTOTYPE[
 {]m4_bpatsubst(m4_defn([AT_PARSE_PARAMS]),
-              [[^,]+[^A-Za-z_0-9]\([A-Za-z_][A-Za-z_0-9]*\), *], [
-  YYUSE(\1);])dnl
+              [[^,]+[^A-Za-z_0-9]\([A-Za-z_][A-Za-z_0-9]*\),* *], [
+  YYUSE (\1);])dnl
 AT_YYERROR_SEES_LOC_IF([[
   LOCATION_PRINT (stderr, ]AT_LOC[);
   fprintf (stderr, ": ");]])[
-  fprintf (stderr, "%s\n", msg);
-}]])
+  fprintf (stderr, "%s\n", msg);]m4_bmatch(m4_defn([AT_PARSE_PARAMS]), [nerrs],[[
+  ++global_nerrs;
+  ++*nerrs;]])[
+}]])])
 
 
 m4_define([AT_YYLEX_DEFINE(c)],
@@ -540,15 +696,17 @@ static
   ]m4_bmatch([$1], [^\(".*"\)?$],
              [[static char const input[] = ]m4_default([$1], [""])],
              [[static int const input[] = ]$1])[;
-  static size_t toknum = 0;
+  static int toknum = 0;
   int res;
   ]AT_USE_LEX_ARGS[
-  assert (toknum < sizeof input / sizeof input[0]);
+  enum { input_elts = sizeof input / sizeof input[0] };
+  (void) input_elts;
+  assert (0 <= toknum && toknum < input_elts);
   res = input[toknum++];
   ]$2[;]AT_TOKEN_CTOR_IF([], [[
   ]AT_LOCATION_IF([[
   ]AT_LOC_FIRST_LINE[ = ]AT_LOC_LAST_LINE[ = 1;
-  ]AT_LOC_FIRST_COLUMN[ = ]AT_LOC_LAST_COLUMN[ = ]AT_CXX_IF([(unsigned )], [(int)])[toknum;]])[
+  ]AT_LOC_FIRST_COLUMN[ = ]AT_LOC_LAST_COLUMN[ = toknum;]])[
   return res;]])[
 }]])
 
@@ -559,10 +717,13 @@ m4_define([AT_MAIN_DEFINE(c)],
 int
 main (int argc, char const* argv[])
 {]AT_DEBUG_IF([[
-  if (getenv("YYDEBUG")
-      || (argc == 2
-          && (!strcmp (argv[1], "-d") || !strcmp (argv[1], "--debug"))))
-    yydebug |= 1;]], [[
+  yydebug = !!getenv ("YYDEBUG");
+  for (int i = 1; i < argc; ++i)
+    if (!strcmp (argv[i], "-p")
+        || !strcmp (argv[i], "-d") || !strcmp (argv[i], "--debug"))
+      yydebug |= 1;
+    else if (!strcmp (argv[i], "-s") || !strcmp (argv[i], "--stat"))
+      yydebug |= 2;]], [[
   (void) argc;
   (void) argv;]])[
   return ]AT_NAME_PREFIX[parse ();
@@ -589,13 +750,43 @@ m4_define([AT_YYERROR_DEFINE(c++)],
 [[/* A C++ error reporting function.  */
 void
 ]AT_NAMESPACE[::parser::error (]AT_LOCATION_IF([[const location_type& l, ]])[const std::string& m)
-{
+{]m4_bmatch(m4_defn([AT_PARSE_PARAMS]), [nerrs],[[
+  ++global_nerrs;
+  ++*nerrs;]])[
   std::cerr << ]AT_LOCATION_IF([l << ": " << ])[m << '\n';
-}]])
+}]AT_ERROR_CUSTOM_IF([[
+void
+]AT_NAMESPACE[::parser::report_syntax_error (const context& ctx) const
+{]AT_PARAM_IF([m4_bpatsubst(m4_defn([AT_PARSE_PARAMS]),
+              [[^,]+[^A-Za-z_0-9]\([A-Za-z_][A-Za-z_0-9]*\),* *], [
+  YYUSE (\1);])])[]m4_bmatch(m4_defn([AT_PARSE_PARAMS]), [nerrs],[[
+  ++global_nerrs;
+  ++*nerrs;]])[]AT_LOCATION_IF([[
+  std::cerr << ctx.location () << ": ";]])[
+  std::cerr << "syntax error";
+  {
+    symbol_kind_type la = ctx.token ();
+    if (la != symbol_kind::S_YYEMPTY)
+      std::cerr << " on token [" << symbol_name (la) << ']';
+  }
+  {
+    enum { TOKENMAX = 10 };
+    symbol_kind_type expected[TOKENMAX];
+    int n = ctx.expected_tokens (expected, TOKENMAX);
+    if (0 < n)
+      {
+        std::cerr << " (expected:";
+        for (int i = 0; i < n; ++i)
+          std::cerr << " [" << symbol_name (expected[i]) << ']';
+        std::cerr << ')';
+      }
+  }
+  std::cerr << '\n';
+}]])])
 
 
-# AT_YYERROR_DEFINE(c++)([INPUT], [ACTION])
-# -----------------------------------------
+# AT_YYLEX_DEFINE(c++)([INPUT], [ACTION])
+# ---------------------------------------
 # Same as in C.
 m4_copy([AT_YYLEX_DEFINE(c)], [AT_YYLEX_DEFINE(c++)])
 
@@ -607,10 +798,14 @@ int
 main (int argc, char const* argv[])
 {
   ]AT_NAMESPACE[::parser p;]AT_DEBUG_IF([[
-  if (getenv("YYDEBUG")
-      || (argc == 2
-          && (!strcmp (argv[1], "-d") || !strcmp (argv[1], "--debug"))))
-    p.set_debug_level (true);]], [[
+  int debug = !!getenv ("YYDEBUG");
+  for (int i = 1; i < argc; ++i)
+    if (!strcmp (argv[i], "-p")
+        || !strcmp (argv[i], "-d") || !strcmp (argv[i], "--debug"))
+      debug |= 1;
+    else if (!strcmp (argv[i], "-s") || !strcmp (argv[i], "--stat"))
+      debug |= 2;
+  p.set_debug_level (debug);]], [[
   (void) argc;
   (void) argv;]])[
   return p.parse ();
@@ -653,19 +848,18 @@ m4_define([AT_YYERROR_DECLARE_EXTERN(d)], [])
 
 m4_define([AT_YYERROR_DEFINE(d)],
 [[/* An error reporting function.  */
-public void error (]AT_LOCATION_IF([[location_type l, ]])[string m)
+public void yyerror (]AT_LOCATION_IF([[YYLocation l, ]])[string m)
 {
-  // FIXME: location.
-  stderr.writeln (m);
+  stderr.writeln (]AT_LOCATION_IF([[l, ": ", ]])[m);
 }]])
 
 
 m4_define([AT_MAIN_DEFINE(d)],
 [[int main ()
 {
-  Lexer l = new Lexer ();
-  Parser p = new Parser (l);
-  p.parse ();
+  auto l = new ]AT_API_prefix[Lexer ();
+  auto p = new ]AT_API_PREFIX[Parser (l);
+  return p.parse ();
 }]])
 
 
@@ -679,60 +873,138 @@ m4_define([AT_MAIN_DEFINE(d)],
 # ------------------------------
 m4_copy([AT_DATA], [AT_DATA_GRAMMAR(java)])
 
+# No need to declare, it's part of the class interface.
+m4_define([AT_YYERROR_DECLARE(java)],        [])
+m4_define([AT_YYERROR_DECLARE_EXTERN(java)], [])
 
 # AT_JAVA_POSITION_DEFINE
 # -----------------------
 m4_define([AT_JAVA_POSITION_DEFINE],
 [[class Position {
-  public int line;
-  public int token;
+  public int line = 1;
+  public int column = 1;
 
   public Position ()
   {
-    line = 0;
-    token = 0;
+    line = 1;
+    column = 1;
   }
 
   public Position (int l, int t)
   {
     line = l;
-    token = t;
+    column = t;
+  }
+
+  public Position (Position p)
+  {
+    line = p.line;
+    column = p.column;
+  }
+
+  public void set (Position p)
+  {
+    line = p.line;
+    column = p.column;
   }
 
   public boolean equals (Position l)
   {
-    return l.line == line && l.token == token;
+    return l.line == line && l.column == column;
   }
 
   public String toString ()
   {
-    return Integer.toString (line) + "." + Integer.toString(token);
+    return Integer.toString (line) + "." + Integer.toString (column);
   }
 
-  public int lineno ()
+  public int line ()
   {
     return line;
   }
 
-  public int token ()
+  public int column ()
   {
-    return token;
+    return column;
+  }
+}
+
+class PositionReader extends BufferedReader {
+
+  private Position position = new Position ();
+  private Position previousPosition = new Position ();
+
+  public PositionReader (Reader reader) {
+    super (reader);
+  }
+
+  public int read () throws IOException {
+    int res = super.read ();
+    previousPosition.set (position);
+    if (res > -1) {
+      char c = (char)res;
+      if (c == '\r' || c == '\n') {
+        position.line += 1;
+        position.column = 1;
+      } else {
+        position.column += 1;
+      }
+    }
+    return res;
+  }
+
+  public Position getPosition () {
+    return position;
+  }
+
+  public Position getPreviousPosition () {
+    return previousPosition;
   }
 }]])
 
 
+# AT_YYERROR_DEFINE(java)
+# -----------------------
+# FIXME: We should not hard-code "Calc".
 m4_define([AT_YYERROR_DEFINE(java)],
 [AT_LOCATION_IF([[public void yyerror (Calc.Location l, String m)
-{
-  if (l == null)
-    System.err.println (m);
-  else
-    System.err.println (l + ": " + m);
+  {]m4_bmatch(m4_defn([AT_PARSE_PARAMS]), [nerrs], [[
+    ++global_nerrs;
+    ++*nerrs;]])[
+    if (l == null)
+      System.err.println(m);
+    else
+      System.err.println(l + ": " + m);
   }
 ]], [[
   public void yyerror (String m)
-  {
+  {]m4_bmatch(m4_defn([AT_PARSE_PARAMS]), [nerrs],[[
+    ++global_nerrs;
+    ++*nerrs;]])[
     System.err.println (m);
+  }
+]])[
+
+]AT_ERROR_CUSTOM_IF([[
+  public void reportSyntaxError(Calc.Context ctx) {
+    System.err.print(]AT_LOCATION_IF([[ctx.getLocation() + ": "
+                     + ]])["syntax error");
+    {
+      Calc.SymbolKind token = ctx.getToken();
+      if (token != null)
+        System.err.print(" on token @<:@" + token.getName() + "@:>@");
+    }
+    {
+      Calc.SymbolKind[] arg = new Calc.SymbolKind[ctx.NTOKENS];
+      int n = ctx.getExpectedTokens(arg, ctx.NTOKENS);
+      if (0 < n) {
+        System.err.print(" (expected:");
+        for (int i = 0; i < n; ++i)
+          System.err.print(" @<:@" + arg[i].getName() + "@:>@");
+        System.err.print(")");
+      }
+    }
+    System.err.println("");
   }
 ]])
 ])
@@ -761,15 +1033,19 @@ m4_define([AT_YYLEX_DEFINE(java)],
 m4_define([AT_MAIN_DEFINE(java)],
 [[class input
 {
-  public static void main (String args[]) throws IOException
+  public static void main (String[] args) throws IOException
   {
-    YYParser p = new YYParser ();
-    System.exit (p.parse () ? 0 : 1);
+    ]AT_API_prefix[Parser p = new ]AT_API_prefix[Parser ();
+    boolean success = p.parse ();
+    if (!success)
+      System.exit (1);
   }
 }]])
 
 m4_define([AT_LANG_FOR_EACH_STD(java)],
 [$1])
+
+
 
 ## --------------- ##
 ## Running Bison.  ##
@@ -807,7 +1083,7 @@ AT_BISON_CHECK_NO_XML($@)])
 # --------------------------------------------------
 # Low-level macro to run bison once.
 m4_define([AT_BISON_CHECK_],
-[AT_CHECK(AT_QUELL_VALGRIND[[ bison -fno-caret ]]$@)])
+[AT_CHECK(AT_SET_ENV[[ bison --color=no -fno-caret ]]$@)])
 
 
 # AT_BISON_CHECK_WARNINGS(BISON_ARGS, [OTHER_AT_CHECK_ARGS])
@@ -826,7 +1102,7 @@ m4_define([AT_BISON_CHECK_WARNINGS_],
 # added after the grammar file name, so skip these checks in that
 # case.
 if test "$POSIXLY_CORRECT_IS_EXPORTED" = false; then
-          ]AT_SAVE_SPECIAL_FILES[
+  ]AT_SAVE_SPECIAL_FILES[
 
   # To avoid expanding it repeatedly, store specified stdout.
   ]AT_DATA([expout], [$3])[
@@ -834,23 +1110,26 @@ if test "$POSIXLY_CORRECT_IS_EXPORTED" = false; then
   # Run with -Werror.
   ]AT_BISON_CHECK_([$1[ -Werror]], [[1]], [expout], [stderr])[
 
-  # Build expected stderr up to and including the "warnings being
-  # treated as errors" message.
-  ]AT_DATA([[experr]], [$4])[
-  $PERL -pi -e 's{(.*): warning:}{$][1: error:};' \
-            -e 's{\[-W(.*)\]$}{@<:@-Werror=$][1@:>@}' \
-                 experr
-  ]AT_CHECK([[sed 's,.*/$,,' stderr 1>&2]], [[0]], [[]], [experr])[
+  if test x"$PERL" != x; then
+    # Build expected stderr up to and including the "warnings being
+    # treated as errors" message.
+    ]AT_DATA([[experr]], [$4])[
+    "$PERL" -pi -e 's{(.*): warning:}{$][1: error:};' \
+                -e 's{\[-W(.*)\]$}{@<:@-Werror=$][1@:>@}' \
+                    experr
+    ]AT_CHECK([[sed 's,.*/$,,' stderr 1>&2]], [[0]], [[]], [experr])[
 
-  # Now check --warnings=error.
-  cp stderr experr
-  ]AT_BISON_CHECK_([$1[ --warnings=error]], [[1]], [expout], [experr])[
+    # Now check --warnings=error.
+    cp stderr experr
+    ]AT_BISON_CHECK_([$1[ --warnings=error]], [[1]], [expout], [experr])[
+  fi
 
   # Now check -Wnone and --warnings=none by making sure that
   # -Werror doesn't change the exit status when -Wnone or
-  # --warnings=none is specified.
-  ]AT_BISON_CHECK_([$1[ -Wnone -Werror]], [[0]], [expout])[
-  ]AT_BISON_CHECK_([$1[ --warnings=none -Werror]], [[0]], [expout])[
+  # --warnings=none is specified.  With traces disabled, there should
+  # be no output on stderr.
+  ]AT_BISON_CHECK_([$1[ -Wnone,none -Werror --trace=none]], [[0]], [expout])[
+  ]AT_BISON_CHECK_([$1[ --warnings=none -Werror --trace=none]], [[0]], [expout])[
 
   ]AT_RESTORE_SPECIAL_FILES[
 fi]dnl
@@ -862,7 +1141,7 @@ fi]dnl
 # when a tortured grammar's XML is known to be too large for xsltproc to
 # handle.
 m4_define([AT_BISON_CHECK_NO_XML],
-[AT_CHECK(m4_null_if([$2], [], [AT_QUELL_VALGRIND ])[[bison -fno-caret ]]$@)
+[AT_CHECK(AT_SET_ENV_IF([$2]) [[bison --color=no -fno-caret ]]$@)
 AT_BISON_CHECK_WARNINGS($@)])
 
 # AT_BISON_CHECK_XML(BISON_ARGS, [OTHER_AT_CHECK_ARGS])
@@ -889,20 +1168,24 @@ m4_define([AT_BISON_CHECK_XML],
   m4_popdef([AT_BISON_ARGS])dnl
   [cp xml-tests/test.output expout]
   AT_CHECK([[$XSLTPROC \
-             `]]AT_QUELL_VALGRIND[[ bison --print-datadir`/xslt/xml2text.xsl \
+             `]]AT_SET_ENV[[ bison --print-datadir`/xslt/xml2text.xsl \
              xml-tests/test.xml]], [[0]], [expout])
   [sort xml-tests/test.gv > expout]
   AT_CHECK([[$XSLTPROC \
-             `]]AT_QUELL_VALGRIND[[ bison --print-datadir`/xslt/xml2dot.xsl \
+             `]]AT_SET_ENV[[ bison --print-datadir`/xslt/xml2dot.xsl \
              xml-tests/test.xml | sort]], [[0]], [expout])
   [rm -rf xml-tests expout]
   AT_RESTORE_SPECIAL_FILES
 [fi]])
 
-# AT_QUELL_VALGRIND
-# -----------------
-# Put this before a Bison invocation to keep Valgrind from complaining about
-# reachable memory.
+
+# AT_SET_ENV_IF(EXIT-STATUS)
+# --------------------------
+# Put this before a Bison invocation to set the environment to:
+# - define COLUMNS to make the test suite independent of the user's
+#   environment;
+# - keep Valgrind from complaining about reachable memory (when
+#   EXIT-STATUS is not 0).
 #
 # Do not quote invocations of this macro within the first argument of AT_CHECK.
 # The triple quoting below will cause test cases to fail if you do.  If you do
@@ -910,10 +1193,15 @@ m4_define([AT_BISON_CHECK_XML],
 # will then fail to shell-escape its contents when attempting to print them.
 # The testsuite verbose output, at least, will be incorrect, but nothing may
 # fail to make sure you notice.
-m4_define([AT_QUELL_VALGRIND],
-[[[VALGRIND_OPTS="$VALGRIND_OPTS --leak-check=summary --show-reachable=no"; export VALGRIND_OPTS;]]])
+m4_define([AT_SET_ENV_IF],
+[[[COLUMNS=1000; export COLUMNS;]] m4_null_if($1, [], [[[VALGRIND_OPTS="$VALGRIND_OPTS --leak-check=summary --show-reachable=no"; export VALGRIND_OPTS; ]]])])
 
 
+# AT_SET_ENV
+# ----------
+# See above.
+m4_define([AT_SET_ENV],
+[AT_SET_ENV_IF([1])])
 
 ## ------------------------ ##
 ## Compiling C, C++ Files.  ##
@@ -968,12 +1256,12 @@ AT_CHECK(m4_join([ ],
 # with trailing ".o" removed, and ".cc" appended.
 m4_define([AT_COMPILE_D],
 [AT_KEYWORDS(d)
+AT_SKIP_IF([[! $BISON_DC_WORKS]])
 AT_CHECK(m4_join([ ],
                  [$DC $DCFLAGS $3],
                  [m4_bmatch([$1], [[.]], [-c])],
                  [-of$1],
-                 [m4_default([$2], [m4_bpatsubst([$1], [\.o$]).d])],
-                 [m4_bmatch([$1], [[.]], [], [$LIBS])]),
+                 [m4_default([$2], [m4_bpatsubst([$1], [\.o$]).d])]),
          0, [ignore], [ignore])])
 
 
@@ -990,7 +1278,7 @@ AT_CHECK([[$SHELL ../../../javacomp.sh ]$1],
 
 
 # AT_LANG_FOR_EACH_STD(BODY)
-# -------------------------------
+# --------------------------
 m4_define([AT_LANG_FOR_EACH_STD],  [AT_LANG_DISPATCH([$0], $@)])
 
 
@@ -1110,7 +1398,7 @@ m4_ifval([$2],
          [if test $at_status != 0; then
             $2
           fi],
-         [SKIP_IF([test $at_status != 0])])
+         [AT_SKIP_IF([test $at_status != 0])])
 ])
 
 
@@ -1119,7 +1407,7 @@ m4_ifval([$2],
 # Check that we can expect exceptions to be handled properly.
 # GCC 4.3 and 4.4 fail https://trac.macports.org/ticket/40853.
 m4_define([AT_SKIP_IF_EXCEPTION_SUPPORT_IS_POOR],
-[AT_DATA_SOURCE([exception.cc],
+[AT_DATA_SOURCE([exceptions.cc],
 [[#include <iostream>
 #include <stdexcept>
 
@@ -1150,10 +1438,9 @@ int main ()
   return 1;
 }
 ]])
-AT_COMPILE_CXX([exception])
-# The "empty" quadrigraph is to protect from cfg.mk's
-# sc_at_parser_check.
-AT_CHECK([@&t@./exception || exit 77], [0], [], [ignore])
+AT_COMPILE_CXX([exceptions])
+# The "empty" quadrigraph is to protect from cfg.mk's sc_at_parser_check.
+AT_CHECK([@&t@./exceptions || exit 77], [0], [], [ignore])
 ])
 
 
@@ -1307,7 +1594,7 @@ yylex (void)
 
 m4_if(m4_index(m4_quote($3), [no-xml]), -1,
       [AT_BISON_CHECK],
-      [AT_BISON_CHECK_NO_XML])([[-Wall --report=all --defines -o input.c input.y]],
+      [AT_BISON_CHECK_NO_XML])([[-Wall --report=all,no-cex --defines -o input.c input.y]],
                                [0], [], m4_dquote($7))
 
 m4_if(m4_index(m4_quote($3), [last-state]), -1,
@@ -1324,7 +1611,7 @@ $9
 # (C90 and C++98) guarantee: 32767.  In that case, GCC's -pedantic
 # will issue an error.
 #
-# There is no "" around `wc` since some indent the result.
+# There is no "" around `wc` since some wc indent the result.
 m4_bmatch([$4], [%define lr.type canonical-lr],
 [if test 32767 -lt `wc -l < input.c`; then
   CFLAGS=`echo " $CFLAGS " | sed -e 's/ -pedantic / /'`
@@ -1341,6 +1628,29 @@ AT_BISON_OPTION_POPDEFS
 AT_CLEANUP
 
 m4_popdef([AT_COND_CASE])])
+
+
+
+# AT_SETS_CHECK(INPUT, SETS, EXPECTED)
+# ------------------------------------
+# Extract the information about the grammar sets from a bison
+# trace output (INPUT), and compare to EXPECTED.
+#
+# And remember, there is no alternation in portable sed.
+m4_define([AT_SETS_CHECK],
+[AT_DATA([extract.sed],
+[[#n
+]m4_foreach([m4_Set], [$2], [[
+/^]m4_Set[/ {
+   :]m4_substr(m4_Set, 0, 7)[
+   p
+   n
+   /^ *$/ !b ]m4_substr(m4_Set, 0, 7)[
+}
+]])])
+
+AT_CHECK([sed -f extract.sed $1], 0, [$3])
+])
 
 
 

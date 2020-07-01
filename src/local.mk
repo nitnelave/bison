@@ -1,4 +1,4 @@
-## Copyright (C) 2001-2015, 2018-2019 Free Software Foundation, Inc.
+## Copyright (C) 2001-2015, 2018-2020 Free Software Foundation, Inc.
 ##
 ## This program is free software: you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -40,6 +40,10 @@ src_bison_SOURCES =                             \
   src/complain.h                                \
   src/conflicts.c                               \
   src/conflicts.h                               \
+  src/counterexample.c                          \
+  src/counterexample.h                          \
+  src/derivation.c                              \
+  src/derivation.h                              \
   src/derives.c                                 \
   src/derives.h                                 \
   src/files.c                                   \
@@ -61,6 +65,8 @@ src_bison_SOURCES =                             \
   src/location.h                                \
   src/lr0.c                                     \
   src/lr0.h                                     \
+  src/lssi.c                                    \
+  src/lssi.h                                    \
   src/main.c                                    \
   src/muscle-tab.c                              \
   src/muscle-tab.h                              \
@@ -71,6 +77,8 @@ src_bison_SOURCES =                             \
   src/output.c                                  \
   src/output.h                                  \
   src/parse-gram.y                              \
+  src/parse-simulation.c                        \
+  src/parse-simulation.h                        \
   src/print-graph.c                             \
   src/print-graph.h                             \
   src/print-xml.c                               \
@@ -91,6 +99,8 @@ src_bison_SOURCES =                             \
   src/scan-skel.h                               \
   src/state.c                                   \
   src/state.h                                   \
+  src/state-item.c                              \
+  src/state-item.h                              \
   src/symlist.c                                 \
   src/symlist.h                                 \
   src/symtab.c                                  \
@@ -117,18 +127,25 @@ BUILT_SOURCES +=                                \
 # definition of libbison, beware that they might expand as flags such as
 # `-lm`.  Keep them here.  Or use a Libtool convenience library.
 src_bison_LDADD =                               \
+  lib/libbison.a                                \
   $(ISNAND_LIBM)                                \
   $(ISNANF_LIBM)                                \
   $(ISNANL_LIBM)                                \
   $(LDEXPL_LIBM)                                \
   $(LDEXP_LIBM)                                 \
-  $(LIBINTL)                                    \
   $(LIBTHREAD)                                  \
   $(LIB_CLOCK_GETTIME)                          \
   $(LIB_GETHRXTIME)                             \
-  lib/libbison.a
+  $(LIB_HARD_LOCALE)                            \
+  $(LIB_MBRTOWC)                                \
+  $(LIB_SETLOCALE_NULL)                         \
+  $(LIBICONV)                                   \
+  $(LIBINTL)                                    \
+  $(LIBREADLINE)                                \
+  $(LIBTEXTSTYLE)
 
 
+EXTRA_DIST += %D%/i18n-strings.c
 
 
 ## ------ ##

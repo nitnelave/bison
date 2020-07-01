@@ -1,22 +1,31 @@
 %code top {
+  #include <assert.h>
   #include <ctype.h>  /* isdigit. */
-  #include <stdio.h>  /* For printf, etc. */
+  #include <stdio.h>  /* printf. */
+  #include <stdlib.h> /* abort. */
   #include <string.h> /* strcmp. */
 
   int yylex (void);
   void yyerror (char const *);
 }
 
-%define api.value.type union /* Generate YYSTYPE from these types:  */
+%define api.header.include {"calc.h"}
+
+/* Generate YYSTYPE from the types used in %token and %type.  */
+%define api.value.type union
 %token <double> NUM "number"
 %type  <double> expr term fact
 
-/* Generate the parser description file.  */
+/* Generate the parser description file (calc.output).  */
 %verbose
+
+/* Nice error messages with details. */
+%define parse.error detailed
+
 /* Enable run-time traces (yydebug).  */
 %define parse.trace
 
-/* Formatting semantic values.  */
+/* Formatting semantic values in debug traces.  */
 %printer { fprintf (yyo, "%g", $$); } <double>;
 
 %% /* The grammar follows.  */
@@ -66,7 +75,8 @@ yylex (void)
   if (c == '.' || isdigit (c))
     {
       ungetc (c, stdin);
-      scanf ("%lf", &yylval.NUM);
+      if (scanf ("%lf", &yylval.NUM) != 1)
+        abort ();
       return NUM;
     }
 
@@ -86,7 +96,7 @@ main (int argc, char const* argv[])
 {
   /* Enable parse traces on option -p.  */
   for (int i = 1; i < argc; ++i)
-    if (!strcmp(argv[i], "-p"))
+    if (!strcmp (argv[i], "-p"))
       yydebug = 1;
   return yyparse ();
 }

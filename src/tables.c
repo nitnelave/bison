@@ -1,6 +1,6 @@
 /* Output the generated parsing program for Bison.
 
-   Copyright (C) 1984, 1986, 1989, 1992, 2000-2006, 2009-2015, 2018-2019
+   Copyright (C) 1984, 1986, 1989, 1992, 2000-2006, 2009-2015, 2018-2020
    Free Software Foundation, Inc.
 
    This file is part of Bison, the GNU Compiler Compiler.
@@ -21,6 +21,7 @@
 #include <config.h>
 #include "system.h"
 
+#include <bitset.h>
 #include <bitsetv.h>
 
 #include "complain.h"
@@ -83,7 +84,7 @@ int nvectors;
 
 static base_number **froms;
 static base_number **tos;
-static unsigned **conflict_tos;
+static int **conflict_tos;
 static size_t *tally;
 static base_number *width;
 
@@ -110,11 +111,13 @@ base_number *base = NULL;
    computation equals to BASE_MINIMUM, later mapped to BASE_NINF to
    keep parser tables small.  */
 base_number base_ninf = 0;
-static base_number *pos = NULL;
+/* Bitset representing an integer set in the range
+   -nstates..table_size (as an upper bound) */
+static bitset pos_set = NULL;
 
-static unsigned *conflrow;
-unsigned *conflict_table;
-unsigned *conflict_list;
+static int *conflrow;
+int *conflict_table;
+int *conflict_list;
 int conflict_list_cnt;
 static int conflict_list_free;
 
@@ -150,20 +153,23 @@ table_grow (int desired)
     table_size *= 2;
 
   if (trace_flag & trace_resource)
-    fprintf (stderr, "growing table and check from: %d to %d\n",
+    fprintf (stderr, "growing tables from %d to %d\n",
              old_size, table_size);
 
   table = xnrealloc (table, table_size, sizeof *table);
+  memset (table + old_size, 0,
+          sizeof *table * (table_size - old_size));
+
   conflict_table = xnrealloc (conflict_table, table_size,
                               sizeof *conflict_table);
-  check = xnrealloc (check, table_size, sizeof *check);
+  memset (conflict_table + old_size, 0,
+          sizeof *conflict_table * (table_size - old_size));
 
-  for (/* Nothing. */; old_size < table_size; ++old_size)
-    {
-      table[old_size] = 0;
-      conflict_table[old_size] = 0;
-      check[old_size] = -1;
-    }
+  check = xnrealloc (check, table_size, sizeof *check);
+  for (int i = old_size; i < table_size; ++i)
+    check[i] = -1;
+
+  bitset_resize (pos_set, table_size + nstates);
 }
 
 
@@ -385,7 +391,7 @@ save_row (state_number s)
       /* Allocate non defaulted actions.  */
       base_number *sp1 = froms[s] = xnmalloc (count, sizeof *sp1);
       base_number *sp2 = tos[s] = xnmalloc (count, sizeof *sp2);
-      unsigned *sp3 = conflict_tos[s] =
+      int *sp3 = conflict_tos[s] =
         nondeterministic_parser ? xnmalloc (count, sizeof *sp3) : NULL;
 
       /* Store non defaulted actions.  */
@@ -406,7 +412,7 @@ save_row (state_number s)
 
 /*------------------------------------------------------------------.
 | Figure out the actions for the specified state, indexed by        |
-| lookahead token type.                                             |
+| lookahead token kind.                                             |
 |                                                                   |
 | The YYDEFACT table is output now.  The detailed info is saved for |
 | putting into YYTABLE later.                                       |
@@ -541,7 +547,7 @@ static void
 goto_actions (void)
 {
   size_t *state_count = xnmalloc (nstates, sizeof *state_count);
-  yydefgoto = xnmalloc (nvars, sizeof *yydefgoto);
+  yydefgoto = xnmalloc (nnterms, sizeof *yydefgoto);
 
   /* For a given nterm I, STATE_COUNT[S] is the number of times there
      is a GOTO to S on I.  */
@@ -640,7 +646,7 @@ pack_vector (vector_number vector)
   size_t t = tally[i];
   base_number *from = froms[i];
   base_number *to = tos[i];
-  unsigned *conflict_to = conflict_tos[i];
+  int *conflict_to = conflict_tos[i];
 
   aver (t != 0);
 
@@ -659,10 +665,8 @@ pack_vector (vector_number vector)
               ok = false;
           }
 
-        if (ok)
-          for (int k = 0; k < vector; k++)
-            if (pos[k] == res)
-              ok = false;
+        if (ok && bitset_test (pos_set, nstates + res))
+          ok = false;
       }
 
       if (ok)
@@ -720,7 +724,7 @@ static void
 pack_table (void)
 {
   base = xnmalloc (nvectors, sizeof *base);
-  pos = xnmalloc (nentries, sizeof *pos);
+  pos_set = bitset_create (table_size + nstates, BITSET_FRUGAL);
   table = xcalloc (table_size, sizeof *table);
   conflict_table = xcalloc (table_size, sizeof *conflict_table);
   check = xnmalloc (table_size, sizeof *check);
@@ -746,7 +750,12 @@ pack_table (void)
         /* Action of I were already coded for S.  */
         place = base[s];
 
-      pos[i] = place;
+      /* Store PLACE into POS_SET.  PLACE might not belong to the set
+         of possible values for instance with useless tokens.  It
+         would be more satisfying to eliminate the need for this
+         'if'.  */
+      if (0 <= nstates + place)
+        bitset_set (pos_set, nstates + place);
       base[order[i]] = place;
     }
 
@@ -754,7 +763,7 @@ pack_table (void)
   base_ninf = table_ninf_remap (base, nvectors, BASE_MINIMUM);
   table_ninf = table_ninf_remap (table, high + 1, ACTION_NUMBER_MINIMUM);
 
-  free (pos);
+  bitset_free (pos_set);
 }
 
 
@@ -771,9 +780,9 @@ tables_generate (void)
      correlated.  In particular the signedness is not taken into
      account.  But it's not useless.  */
   verify (sizeof nstates <= sizeof nvectors);
-  verify (sizeof nvars <= sizeof nvectors);
+  verify (sizeof nnterms <= sizeof nvectors);
 
-  nvectors = state_number_as_int (nstates) + nvars;
+  nvectors = state_number_as_int (nstates) + nnterms;
 
   froms = xcalloc (nvectors, sizeof *froms);
   tos = xcalloc (nvectors, sizeof *tos);

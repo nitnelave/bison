@@ -1,7 +1,7 @@
 /* Top level entry point of Bison.
 
    Copyright (C) 1984, 1986, 1989, 1992, 1995, 2000-2002, 2004-2015,
-   2018-2019 Free Software Foundation, Inc.
+   2018-2020 Free Software Foundation, Inc.
 
    This file is part of Bison, the GNU Compiler Compiler.
 
@@ -33,6 +33,7 @@
 
 #include "complain.h"
 #include "conflicts.h"
+#include "counterexample.h"
 #include "derives.h"
 #include "files.h"
 #include "fixits.h"
@@ -44,6 +45,7 @@
 #include "muscle-tab.h"
 #include "nullable.h"
 #include "output.h"
+#include "parse-gram.h"
 #include "print-graph.h"
 #include "print-xml.h"
 #include "print.h"
@@ -66,11 +68,12 @@ main (int argc, char *argv[])
   {
     char *cp = NULL;
     char const *localedir = relocate2 (LOCALEDIR, &cp);
-    (void) bindtextdomain (PACKAGE, localedir);
-    (void) bindtextdomain ("bison-runtime", localedir);
+    bindtextdomain ("bison", localedir);
+    bindtextdomain ("bison-gnulib", localedir);
+    bindtextdomain ("bison-runtime", localedir);
     free (cp);
   }
-  (void) textdomain (PACKAGE);
+  textdomain ("bison");
 
   {
     char const *cp = getenv ("LC_CTYPE");
@@ -100,7 +103,7 @@ main (int argc, char *argv[])
      the grammar; see gram.h.  */
 
   timevar_push (tv_reader);
-  reader ();
+  reader (grammar_file);
   timevar_pop (tv_reader);
 
   if (complaint_status == status_complaint)
@@ -143,6 +146,9 @@ main (int argc, char *argv[])
       conflicts_update_state_numbers (old_to_new, nstates_old);
       free (old_to_new);
     }
+  if (report_flag & report_cex
+      || warning_is_enabled (Wcounterexamples))
+    counterexample_init ();
   conflicts_print ();
   timevar_pop (tv_conflicts);
 
@@ -206,6 +212,8 @@ main (int argc, char *argv[])
       timevar_pop (tv_parser);
     }
 
+ finish:
+
   timevar_push (tv_free);
   nullable_free ();
   derives_free ();
@@ -214,27 +222,26 @@ main (int argc, char *argv[])
   reduce_free ();
   conflicts_free ();
   grammar_free ();
+  counterexample_free ();
   output_file_names_free ();
 
-  /* The scanner memory cannot be released right after parsing, as it
-     contains things such as user actions, prologue, epilogue etc.  */
+  /* The scanner and parser memory cannot be released right after
+     parsing, as it contains things such as user actions, prologue,
+     epilogue etc.  */
   gram_scanner_free ();
+  parser_free ();
+
   muscle_free ();
   code_scanner_free ();
   skel_scanner_free ();
-  quotearg_free ();
   timevar_pop (tv_free);
 
   if (trace_flag & trace_bitsets)
     bitset_stats_dump (stderr);
 
- finish:
-
   /* Stop timing and print the times.  */
   timevar_stop (tv_total);
   timevar_print (stderr);
-
-  caret_free ();
 
   /* Fix input file now, even if there are errors: that's less
      warnings in the following runs.  */
@@ -248,6 +255,9 @@ main (int argc, char *argv[])
       fixits_free ();
     }
   uniqstrs_free ();
+
+  complain_free ();
+  quotearg_free ();
 
   return complaint_status ? EXIT_FAILURE : EXIT_SUCCESS;
 }

@@ -1,6 +1,6 @@
 ## Makefile for Bison testsuite.
 
-## Copyright (C) 2000-2015, 2018-2019 Free Software Foundation, Inc.
+## Copyright (C) 2000-2015, 2018-2020 Free Software Foundation, Inc.
 ##
 ## This program is free software: you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -15,7 +15,7 @@
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-EXTRA_DIST += $(TESTSUITE_AT) %D%/testsuite %D%/testsuite.h
+EXTRA_DIST += %D%/linear $(TESTSUITE_AT) %D%/testsuite %D%/testsuite.h
 
 DISTCLEANFILES       += %D%/atconfig $(check_SCRIPTS)
 MAINTAINERCLEANFILES += $(TESTSUITE)
@@ -47,7 +47,9 @@ TESTSUITE_AT =                                \
   %D%/c++.at                                  \
   %D%/calc.at                                 \
   %D%/conflicts.at                            \
+  %D%/counterexample.at                       \
   %D%/cxx-type.at                             \
+  %D%/diagnostics.at                          \
   %D%/existing.at                             \
   %D%/glr-regression.at                       \
   %D%/headers.at                              \
@@ -55,6 +57,7 @@ TESTSUITE_AT =                                \
   %D%/java.at                                 \
   %D%/javapush.at                             \
   %D%/local.at                                \
+  %D%/m4.at                                   \
   %D%/named-refs.at                           \
   %D%/output.at                               \
   %D%/package.m4                              \
@@ -62,6 +65,7 @@ TESTSUITE_AT =                                \
   %D%/reduce.at                               \
   %D%/regression.at                           \
   %D%/report.at                               \
+  %D%/scanner.at                              \
   %D%/sets.at                                 \
   %D%/skeletons.at                            \
   %D%/synclines.at                            \
@@ -75,7 +79,7 @@ AUTOTESTFLAGS = -I $(top_srcdir)/%D%
 $(TESTSUITE): $(TESTSUITE_AT)
 	$(AM_V_GEN) \
 	  $(AUTOTEST) $(AUTOTESTFLAGS) $(srcdir)/%D%/testsuite.at -o $@.tmp
-	$(AM_V_at)$(PERL) -pi -e 's/\@tb\@/\t/g' $@.tmp
+	$(AM_V_at)"$(PERL)" -pi -e 's/\@tb\@/\t/g' $@.tmp
 	$(AM_V_at)mv $@.tmp $@
 
 
@@ -84,13 +88,20 @@ $(TESTSUITE): $(TESTSUITE_AT)
 ## -------------------- ##
 
 # Move into %D%/ so that testsuite.dir etc. be created there.
-RUN_TESTSUITE = $(TESTSUITE) -C %D% $(TESTSUITEFLAGS)
+RUN_TESTSUITE = $(SHELL) $(TESTSUITE) -C %D% $(TESTSUITEFLAGS)
 check_SCRIPTS += $(BISON) %D%/atconfig %D%/atlocal
 RUN_TESTSUITE_deps = all $(TESTSUITE) $(check_SCRIPTS)
 
 clean-local: clean-local-tests
 clean-local-tests:
 	test ! -f $(TESTSUITE) || $(TESTSUITE) -C %D% --clean
+
+.PHONY: recheck
+recheck: $(RUN_TESTSUITE_deps)
+	$(RUN_TESTSUITE)					\
+	  $$(perl -n						\
+	     -e 'eof && /^(\d+).*: FAILED/ && print "$$1 "'	\
+		%D%/testsuite.dir/*/testsuite.log)
 
 check-local: $(RUN_TESTSUITE_deps)
 	$(RUN_TESTSUITE)

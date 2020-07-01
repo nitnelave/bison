@@ -1,6 +1,6 @@
 /* Print an xml on generated parser, for Bison,
 
-   Copyright (C) 2007, 2009-2015, 2018-2019 Free Software Foundation,
+   Copyright (C) 2007, 2009-2015, 2018-2020 Free Software Foundation,
    Inc.
 
    This file is part of Bison, the GNU Compiler Compiler.
@@ -57,7 +57,7 @@ static struct escape_buf escape_bufs[num_escape_bufs];
 static void
 print_core (FILE *out, int level, state *s)
 {
-  item_number *sitems = s->items;
+  item_index *sitems = s->items;
   size_t snritems = s->nitems;
 
   /* Output all the items of a state, not only its kernel.  */
@@ -89,7 +89,7 @@ print_core (FILE *out, int level, state *s)
           if (reds->lookahead_tokens && red != -1)
             {
               xml_printf (out, level + 1,
-                          "<item rule-number=\"%d\" point=\"%d\">",
+                          "<item rule-number=\"%d\" dot=\"%d\">",
                           r->number, sp1 - sp);
               state_rule_lookahead_tokens_print_xml (s, r,
                                                      out, level + 2);
@@ -100,7 +100,7 @@ print_core (FILE *out, int level, state *s)
 
       if (!printed)
         xml_printf (out, level + 1,
-                    "<item rule-number=\"%d\" point=\"%d\"/>",
+                    "<item rule-number=\"%d\" dot=\"%d\"/>",
                     r->number,
                     sp1 - sp);
     }
@@ -329,7 +329,7 @@ print_reductions (FILE *out, int level, state *s)
 
 /*--------------------------------------------------------------.
 | Report on OUT all the actions (shifts, gotos, reductions, and |
-| explicit erros from %nonassoc) of S.                          |
+| explicit errors from %nonassoc) of S.                         |
 `--------------------------------------------------------------*/
 
 static void
@@ -379,7 +379,7 @@ print_grammar (FILE *out, int level)
 
   /* Terminals */
   xml_puts (out, level + 1, "<terminals>");
-  for (symbol_number i = 0; i < max_user_token_number + 1; i++)
+  for (int i = 0; i < max_code + 1; i++)
     if (token_translations[i] != undeftoken->content->number)
       {
         char const *tag = symbols[token_translations[i]]->tag;

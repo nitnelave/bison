@@ -83,26 +83,39 @@ field), where field can `has_id`, `id`, etc.: see
 
 The macro `b4_symbol(NUM, FIELD)` gives access to the following FIELDS:
 
-- `has_id`: 0 or 1.
-
-  Whether the symbol has an id.
+- `has_id`: 0 or 1
+  Whether the symbol has an `id`.
 
 - `id`: string
-  If has_id, the id (prefixed by api.token.prefix if defined), otherwise
-  defined as empty.  Guaranteed to be usable as a C identifier.
+  If `has_id`, the name of the token kind (prefixed by api.token.prefix if
+  defined), otherwise empty.  Guaranteed to be usable as a C identifier.
+  This is used to define the token kind (i.e., the enum used by the return
+  value of yylex).  Should be named `token_kind`.
 
-- `tag`: string.
-  A representation of the symbol.  Can be 'foo', 'foo.id', '"foo"' etc.
+- `tag`: string
+  A human readable representation of the symbol.  Can be `'foo'`,
+  `'foo.id'`, `'"foo"'` etc.
 
-- `user_number`: integer
+- `code`: integer
+  The token code associated to the token kind `id`.
   The external number as used by yylex.  Can be ASCII code when a character,
-  some number chosen by bison, or some user number in the case of
-  %token FOO <NUM>.  Corresponds to yychar in yacc.c.
+  some number chosen by bison, or some user number in the case of `%token
+  FOO <NUM>`.  Corresponds to `yychar` in `yacc.c`.
 
 - `is_token`: 0 or 1
   Whether this is a terminal symbol.
 
+- `kind_base`: string
+  The base of the symbol kind, i.e., the enumerator of this symbol (token or
+  nonterminal) which is mapping to its `number`.
+
+- `kind`: string
+  Same as `kind_base`, but possibly with a prefix in some languages.  E.g.,
+  EOF's `kind_base` and `kind` are `YYSYMBOL_YYEOF` in C, but are
+  `S_YYEMPTY` and `symbol_kind::S_YYEMPTY` in C++.
+
 - `number`: integer
+  The code associated to the `kind`.
   The internal number (computed from the external number by yytranslate).
   Corresponds to yytoken in yacc.c.  This is the same number that serves as
   key in b4_symbol(NUM, FIELD).
@@ -138,9 +151,10 @@ The macro `b4_symbol(NUM, FIELD)` gives access to the following FIELDS:
 - `printer`: string
 - `printer_file`: string
 - `printer_line`: integer
+- `printer_loc`: location
   If the symbol has a printer, everything about it.
 
-- `has_destructor`, `destructor`, `destructor_file`, `destructor_line`
+- `has_destructor`, `destructor`, `destructor_file`, `destructor_line`, `destructor_loc`
   Likewise.
 
 ### `b4_symbol_value(VAL, [SYMBOL-NUM], [TYPE-TAG])`
@@ -173,7 +187,7 @@ fill-column: 76
 ispell-dictionary: "american"
 End:
 
-Copyright (C) 2002, 2008-2015, 2018-2019 Free Software Foundation, Inc.
+Copyright (C) 2002, 2008-2015, 2018-2020 Free Software Foundation, Inc.
 
 This file is part of GNU Bison.
 

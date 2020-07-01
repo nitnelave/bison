@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2008-2015, 2018-2019 Free Software Foundation, Inc.
+  Copyright (C) 2008-2015, 2018-2020 Free Software Foundation, Inc.
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -117,7 +117,7 @@ namespace yy
     static int count = 0;
     const int stage = count;
     ++count;
-    auto loc = parser::location_type{nullptr, unsigned (stage + 1), unsigned (stage + 1)};
+    auto loc = parser::location_type{nullptr, stage + 1, stage + 1};
     if (stage == 0)
       return parser::make_TEXT (make_string_uptr ("I have numbers for you."), std::move (loc));
     else if (stage < max)
@@ -139,7 +139,7 @@ namespace yy
 int
 main (int argc, const char *argv[])
 {
-  if (2 <= argc && isdigit (*argv[1]))
+  if (2 <= argc && isdigit (static_cast<unsigned char> (*argv[1])))
     {
       auto maxl = strtol (argv[1], nullptr, 10);
       max = INT_MIN <= maxl && maxl <= INT_MAX ? int(maxl) : 4;
